@@ -111,39 +111,21 @@ function investment_discharge!(EP::Model, inputs::Dict, setup::Dict)
             eExistingCap[y]
         end)
 
-    ## Objective Function Expressions ##
-    
-    # Annuitized investment cost expression - only applies to resources eligible for new capacity
-    @expression(EP, eCInv[y in 1:G],
-        if y in NEW_CAP
-            investment_cost = inv_cost_per_mwyr(gen[y])
+    ### Need editting ##
+    @expression(EP, eCFix[y in 1:G],
+        if y in NEW_CAP # Resources eligible for new capacity (Non-Retrofit)
             if y in COMMIT
-                investment_cost * cap_size(gen[y]) * vCAP[y]
+                inv_cost_per_mwyr(gen[y]) * cap_size(gen[y]) * vCAP[y] +
+                fixed_om_cost_per_mwyr(gen[y]) * eTotalCap[y]
             else
-                investment_cost * vCAP[y]
+                inv_cost_per_mwyr(gen[y]) * vCAP[y] +
+                fixed_om_cost_per_mwyr(gen[y]) * eTotalCap[y]
             end
         else
-            0
+            fixed_om_cost_per_mwyr(gen[y]) * eTotalCap[y]
         end)
-    
-    # Fixed O&M cost expression - applies to all resources
-    @expression(EP, eCFom[y in 1:G], 
-        fixed_om_cost_per_mwyr(gen[y]) * eTotalCap[y])
-    
-    # Total fixed cost expression - combines investment and fixed O&M costs
-    @expression(EP, eCFix[y in 1:G],
-        if y in NEW_CAP
-            # For resources with new capacity: investment cost + fixed O&M cost
-            EP[:eCInv][y] + EP[:eCFom][y]
-        else
-            # For existing resources: only fixed O&M cost
-            EP[:eCFom][y]
-        end)
-
     # Sum individual resource contributions to fixed costs to get total fixed costs
     @expression(EP, eTotalCFix, sum(EP[:eCFix][y] for y in 1:G))
-    @expression(EP, eTotalCInv, sum(EP[:eCInv][y] for y in 1:G))
-    @expression(EP, eTotalCFom, sum(EP[:eCFom][y] for y in 1:G))
 
     # Add term to objective function expression
     if MultiStage == 1
