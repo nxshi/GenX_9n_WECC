@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.4.6] - 2026-01-06
+
+### Fixed
+
+- Got rid of brodcast operator in `src/write_outputs/capacity_reserve_margin/write_virtual_discharge.jl` for preventing error with Julia 1.6 (#885)
+
 ## [0.4.5] - 2025-07-07
 
 ### Added
