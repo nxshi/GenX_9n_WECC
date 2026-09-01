@@ -1,18 +1,12 @@
-# WECC 9-Zone Project-Manager-to-GenX System Input Conversion
+# System Input Conversion
 
-## Project
+This note covers only the four `system` tables. Case scope, planning years,
+and source-data location are documented in the parent [README](../README.md).
 
-This project converts provided WECC nine-zone data into the four
-GenX system input tables for a five-stage capacity-expansion model. The stages
-are p1=2025, p2=2030, p3=2035, p4=2040, and p5=2045. Source data is in
-`WECC-9n test system/data`; the only model files modified are the matching
-`system` tables inside `inputs_p1` through `inputs_p5`.
+## Converter
 
-## What the script does
-
-Run `python3 convert_system_inputs.py` from this `inputs` folder. It validates
-the project-manager delivery before making any changes, then replaces exactly
-these files in every stage's existing `system` folder:
+Run `python3 system_input_conversion.py` from this `inputs` folder. It validates
+the delivery before replacing these files in each existing `system` folder:
 
 - `Demand_data.csv`: maps yearly hourly node demand to `Demand_MW_z1` through
   `Demand_MW_z9`; maps `Parameter.csv.ENSCost` to `Voll` and `$/MWh`.
@@ -23,14 +17,11 @@ these files in every stage's existing `system` folder:
 - `Network.csv`: maps line endpoints, TTC, length, loss factor, and security
   factor into GenX's nine-zone network representation.
 
-For a future delivery in the same format, either replace the CSVs under
-`WECC-9n test system/data` and run the command again, or point at another
-delivery with `python3 convert_system_inputs.py --source /path/to/data`.
-Use `--dry-run` to validate a delivery without changing any inputs. Writes are
-atomic per CSV; no duplicate staged copies or backup input sets are created.
-Use `--verify` after conversion to reconcile every converted demand,
-availability, fuel, and network value against the PM delivery and approved
-defaults without changing any files.
+For a future delivery in the same format, use
+`python3 system_input_conversion.py --source /path/to/data`. Use `--dry-run` to
+validate a delivery without changing inputs, and `--verify` after conversion
+to reconcile every converted value against the delivery and approved defaults.
+Writes are atomic per CSV; no duplicate staged copies or backups are created.
 
 ## When GenX defaults are used
 

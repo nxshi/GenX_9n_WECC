@@ -1,38 +1,50 @@
-# Three Zones Multi-Stage
+# WECC 9-Zone Multi-Stage Case
 
-This is a toy multi-stage example with hourly resolution which contains zones representing Massachusetts, Connecticut, and Maine. It is designed to show how to run multi-stage investment planning models. The ten represented resources include natural gas, solar PV, wind, and lithium-ion battery storage.
+This case is a stylized, aggregated WECC capacity-expansion model built around
+nine zones and five planning years: 2025, 2030, 2035, 2040, and 2045. The
+project-manager delivery provides full-year hourly demand and availability,
+aggregated generation data, and a 17-line transport network.
 
-To run the model, first navigate to the example directory:
+The intended five model-input periods are:
 
-- Using a Julia REPL:
+| Input folder | Planning year |
+|---|---:|
+| `inputs/inputs_p1` | 2025 |
+| `inputs/inputs_p2` | 2030 |
+| `inputs/inputs_p3` | 2035 |
+| `inputs/inputs_p4` | 2040 |
+| `inputs/inputs_p5` | 2045 |
+
+## Inputs
+
+The project-manager source delivery is in
+`inputs/WECC-9n test system/`. Its [data documentation](inputs/WECC-9n%20test%20system/documentation/DATA_DOCUMENTATION.md)
+describes the nine-zone test system and source assumptions.
+
+At present, the source data has been converted only for the four `system`
+tables in each planning-period folder:
+
+- `Demand_data.csv`
+- `Generators_variability.csv`
+- `Fuels_data.csv`
+- `Network.csv`
+
+The reusable converter, its validation mode, direct mappings, and documented
+GenX-default assumptions are described in
+[inputs/SYSTEM_INPUT_CONVERSION.md](inputs/SYSTEM_INPUT_CONVERSION.md).
+Resource and policy table conversion remains separate work.
+
+## Running the case
+
+Run from this case directory:
 
 ```bash
-$ julia
-julia> cd("example_systems/6_three_zones_w_multistage/")
+julia Run.jl
 ```
 
-- Using a terminal or command prompt:
-```bash
-$ cd example_systems/6_three_zones_w_multistage/
-``` 
-   
-Next, ensure that your settings in `settings/genx_settings.yml` are correct. The default settings use the solver HiGHS and time domain reduced input data (`TimeDomainReduction: 1`). 
+Before running, review the settings files—especially the multi-stage and
+time-domain-reduction settings—so they reflect the intended five-period,
+nine-zone study. The current settings are retained separately and are not
+changed by the system-input converter.
 
-The `settings/multi_stage_settings.yml` file contains settings parameters specific to multi-stage modeling. This example is configured for three model periods (`NumPeriods: 3`) of 10 years in length each (`PeriodLength: 10`).
-
-Multi-period modeling in GenX requires a separate set of model inputs for each period to be modeled, which are located in the directories `inputs/inputs_p$`, where `$` is the number of the model period. Although separate model periods can have different costs and policy parameters, the resources names and types, specified in each resource `.csv` files (included in the `resources` folder) must be identical across model periods. In addition, multi-stage modeling with a single zone requires an additional input file, `Resource_multistage_data.csv`, also located in the `resources` directory, which contains fields related to resource lifetimes, capital recovery periods, and endogenous retirements.
-
-A rate-based carbon cap becomes more stringent across the three model periods and for each zone, declining from of 1,000 gCO<sub>2</sub> per kWh in the first period, 500  gCO<sub>2</sub> per kWh in the second period, and  50 gCO<sub>2</sub> per kWh in the third period, as specified in the `policies/CO2_cap.csv` input files in `inputs/inputs_p1`, `inputs/inputs_p2`, and `inputs/inputs_p3` respectively.
-
-Once the settings are confirmed, run the model with the `Run.jl` script in the example directory:
-
-- Using a Julia REPL (recommended)
-```julia
-julia> include("Run.jl")
-```
-- Using a terminal or command prompt:
-```bash
-$ julia Run.jl
-```
-
-Once the model has completed, results will write to the `results` directory.
+Model results are written to the case results directory.
