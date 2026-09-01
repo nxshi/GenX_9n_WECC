@@ -38,3 +38,7 @@ test/TDR/TDR_results_test
 *.pdf
 *.pptx
 *.xlsx
+
+# Python cache (data-conversion helper scripts)
+__pycache__/
+*.pyc

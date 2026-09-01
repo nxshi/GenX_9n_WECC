@@ -1,0 +1,10 @@
+Region_description,Network_zones,CapRes_1
+Central,z1,0.15
+IID,z2,0.15
+LADWP,z3,0.15
+NCNC,z4,0.15
+North,z5,0.15
+PGE,z6,0.15
+SCE,z7,0.15
+SDGE,z8,0.15
+South,z9,0.15

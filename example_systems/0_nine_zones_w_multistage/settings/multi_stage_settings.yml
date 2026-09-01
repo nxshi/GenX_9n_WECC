@@ -1,6 +1,6 @@
-NumStages: 3 # Number of model investment planning stages
-StageLengths: [10,10,10] # Length of each model stage (years)
-WACC: 0.045 # Weighted average cost of capital
+NumStages: 5 # Number of model investment planning stages
+StageLengths: [5,5,5,5,5] # Length of each model stage (years)
+WACC: 0.07 # Weighted average cost of capital; data documentation section 1/4.3: 7% discount rate
 ConvergenceTolerance: 0.01 # Relative optimality gap used for convergence
-Myopic: 1 # If using multi-stage GenX, 1 = myopic, 0 = dual dynamic programming
+Myopic: 0 # If using multi-stage GenX, 1 = myopic, 0 = dual dynamic programming
 WriteIntermittentOutputs: 0 # If 1, write intermediate outputs to disk

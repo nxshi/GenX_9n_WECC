@@ -1,0 +1,7 @@
+Resource,Zone,Hydro_Energy_to_Power_Ratio,Min_Power,Ramp_Up_Percentage,Ramp_Dn_Percentage,Mga,Resource_Type,Must_Run,LDS,Existing_Cap_MW,Cap_Size,New_Build,Can_Retire,Min_Cap_MW,Max_Cap_MW,Inv_Cost_per_MWyr,Fixed_OM_Cost_per_MWyr,Var_OM_Cost_per_MWh,Heat_Rate_MMBTU_per_MWh,Fuel,Reg_Cost,Rsv_Cost,Reg_Max,Rsv_Max,region,cluster
+LADWP_Hydro,3,0,0,1,1,0,conventional_hydroelectric,0,0,320,1,0,1,-1,-1,0,24000,1.63,0,None,0,0,0,0,LADWP,1
+NCNC_Hydro,4,0,0,1,1,0,conventional_hydroelectric,0,0,2770,1,0,1,-1,-1,0,24000,1.63,0,None,0,0,0,0,NCNC,1
+North_Hydro,5,0,0,1,1,0,conventional_hydroelectric,0,0,23670,1,0,1,-1,-1,0,24000,1.63,0,None,0,0,0,0,North,1
+PGE_Hydro,6,0,0,1,1,0,conventional_hydroelectric,0,0,7100,1,0,1,-1,-1,0,24000,1.63,0,None,0,0,0,0,PGE,1
+SCE_Hydro,7,0,0,1,1,0,conventional_hydroelectric,0,0,2050,1,0,1,-1,-1,0,24000,1.63,0,None,0,0,0,0,SCE,1
+South_Hydro,9,0,0,1,1,0,conventional_hydroelectric,0,0,490,1,0,1,-1,-1,0,24000,1.63,0,None,0,0,0,0,South,1
