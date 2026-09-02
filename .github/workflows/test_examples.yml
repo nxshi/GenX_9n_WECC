@@ -2,7 +2,7 @@ name: Test-examples
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
     tags: ['*']
   schedule:
     - cron: 21 4 * * * # Run at 12:21am US Eastern time
@@ -10,8 +10,9 @@ on:
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
-        branch: ["main", "develop"]
+        branch: ["main"]
         version: ["1.9", "1.10", '1']
         include:
           - version: '1'
