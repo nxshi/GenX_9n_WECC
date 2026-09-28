@@ -5,6 +5,12 @@ nine zones and five planning years: 2025, 2030, 2035, 2040, and 2045. The
 project-manager delivery provides full-year hourly demand and availability,
 aggregated generation data, and a 17-line transport network.
 
+## Results website
+
+[Open the Capacity Expansion Model Comparison results website](https://wecc-genx-results-explorer.ns9524.chatgpt.site/).
+The editable site source, generated data, downloads, and collaborator update
+instructions are kept in [website/](website/README.md).
+
 The intended five model-input periods are:
 
 | Input folder | Planning year |

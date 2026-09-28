@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Compare EPRI and GenX capacity-expansion results.">
+<title>Explore | Capacity Expansion Model Comparison - Results</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body data-page="explorer">
+<header class="topbar"><div class="shell nav">
+<a class="brand" href="index.html"><span class="bolt">&#991;</span><span>Capacity Expansion Model Comparison - Results</span></a><nav class="links" aria-label="Main navigation"><a class="active" href="index.html">Explore</a><a href="compare.html">Compare</a></nav>
+</div></header><main class="shell"><section class="hero"><div>
+<p class="eyebrow">2025&ndash;2045</p>
+<h1>Model Results</h1>
+<p>Compare EPRI and GenX capacity-expansion results.</p>
+</div>
+</section><section class="controls" aria-label="Model result controls"><div class="control">
+<label for="scenario">Model Result</label><select id="scenario"></select>
+</div>
+<div class="control">
+<label for="profile-year">Profile year</label><select id="profile-year"></select>
+</div>
+<div class="control">
+<label for="week">Representative week</label><select id="week"></select>
+</div></section><section class="summary" id="summary"></section><section class="grid"><article class="card"><h2>System Cost</h2>
+<p class="sub">Annual cost by component across model years.</p>
+<div class="chart-wrap"><canvas id="cost-total"></canvas></div></article><article class="card"><h2>Cumulative Buildout</h2>
+<p class="sub">Cumulative additions minus retirements by technology across model years.</p>
+<div class="chart-wrap"><canvas id="cost-breakdown"></canvas></div></article><article class="card"><h2>Total Installed Capacity</h2>
+<p class="sub" id="capacity-sub">Installed capacity by technology across model years.</p>
+<div class="chart-wrap"><canvas id="capacity-mix"></canvas></div></article><article class="card"><h2>Generation Mix</h2>
+<p class="sub">Annual generation by technology across model years.</p>
+<div class="chart-wrap"><canvas id="generation-mix"></canvas></div></article><article class="card wide"><h2>Weekly Generation Profile</h2>
+<p class="sub" id="profile-sub">Hourly generation by technology with demand.</p>
+<div class="chart-wrap tall"><canvas id="profile"></canvas></div>
+<div class="legend" id="technology-legend"></div>
+<p class="note" id="profile-note"></p></article><article class="card"><h2>CO&#8322; Emissions</h2>
+<p class="sub">Annual CO&#8322; emissions by region across model years.</p>
+<div class="chart-wrap"><canvas id="emissions-total"></canvas></div></article><article class="card"><h2>Emissions breakdown</h2>
+<p class="sub" id="emissions-sub">Selected profile year.</p>
+<div class="chart-wrap"><canvas id="emissions-breakdown"></canvas></div></article></section><section class="method"><h2>How to interpret this page</h2>
+<ul id="method-notes"></ul></section></main><footer class="footer downloads-footer"><div class="shell download-section"><div><p class="eyebrow">Data exports</p><h2>Download Results</h2><p>Download a standardized Excel workbook for each model result.</p></div><div class="download-links"><a href="downloads/epri-results.xlsx" download>EPRI results <span>.xlsx</span></a><a href="downloads/genx-kmeans-myopic-results.xlsx" download>GenX (K-means; myopic) <span>.xlsx</span></a><a href="downloads/genx-sampled-weeks-myopic-results.xlsx" download>GenX (sampled weeks; myopic) <span>.xlsx</span></a></div></div></footer><script src="data/results-data.js"></script><script src="app.js"></script>
+</body>
+</html>

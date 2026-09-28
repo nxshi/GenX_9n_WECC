@@ -6,6 +6,7 @@ Manifest.toml
 .Rhistory
 deps/deps.jl
 .vscode/
+.venv/
 GenXJulEnv/
 output_data/
 MGAResults_min/
@@ -38,6 +39,10 @@ test/TDR/TDR_results_test
 *.pdf
 *.pptx
 *.xlsx
+
+# Published website downloads are intentionally versioned.
+!example_systems/0_nine_zones_w_multistage/website/dist/downloads/
+!example_systems/0_nine_zones_w_multistage/website/dist/downloads/*.xlsx
 
 # Python cache (data-conversion helper scripts)
 __pycache__/

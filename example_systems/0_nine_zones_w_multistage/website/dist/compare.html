@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Compare EPRI and GenX capacity-expansion model results.">
+<title>Compare | Capacity Expansion Model Comparison - Results</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body data-page="compare">
+<header class="topbar"><div class="shell nav">
+<a class="brand" href="index.html"><span class="bolt">&#991;</span><span>Capacity Expansion Model Comparison - Results</span></a><nav class="links" aria-label="Main navigation"><a href="index.html">Explore</a><a class="active" href="compare.html">Compare</a></nav>
+</div></header><main class="shell"><section class="hero"><div>
+<p class="eyebrow">2025&ndash;2045</p>
+<h1>Compare Model Results</h1>
+<p>Compare model-result totals and pairwise differences.</p>
+</div></section><section class="comparison-control-grid"><div class="controls comparison-control-panel"><div class="control-panel-heading">
+<h2>All Model Results — Line Charts</h2>
+<p>Choose which model results appear in the left-column charts.</p>
+</div>
+<div class="control control-wide">
+<span class="control-label">Visible model results</span><div class="checkboxes" id="scenario-checks"></div>
+</div></div><div class="controls comparison-control-panel pairwise-controls"><div class="control-panel-heading">
+<h2>Pairwise Difference Charts</h2>
+<p>Choose the two model results used in the right-column charts. Values show Model Result A minus Model Result B.</p>
+</div>
+<div class="pair-selectors"><div class="control">
+<label for="net-scenario-a">Model Result A</label><select id="net-scenario-a"></select>
+</div>
+<div class="control">
+<label for="net-scenario-b">Model Result B</label><select id="net-scenario-b"></select>
+</div></div></div></section><section class="grid comparison-grid"><article class="card"><h2>System Cost — All Model Results</h2>
+<p class="sub">Annual system cost across model years.</p>
+<div class="chart-wrap"><canvas id="compare-cost-all"></canvas></div></article><article class="card"><h2 id="compare-cost-net-title">Net System Cost</h2>
+<p class="sub">Model Result A minus Model Result B by cost component.</p>
+<div class="chart-wrap"><canvas id="compare-cost-net"></canvas></div></article><article class="card"><h2>CO&#8322; Emissions — All Model Results</h2>
+<p class="sub">Annual CO&#8322; emissions across model years.</p>
+<div class="chart-wrap"><canvas id="compare-emissions-all"></canvas></div></article><article class="card"><h2 id="compare-emissions-net-title">Net CO&#8322; Emissions</h2>
+<p class="sub">Model Result A minus Model Result B by region.</p>
+<div class="chart-wrap"><canvas id="compare-emissions-net"></canvas></div></article><article class="card"><h2>Cumulative Buildout — All Model Results</h2>
+<p class="sub">Cumulative additions minus retirements across model years.</p>
+<div class="chart-wrap"><canvas id="compare-buildout-all"></canvas></div></article><article class="card"><h2 id="compare-buildout-net-title">Net Cumulative Buildout</h2>
+<p class="sub">Model Result A minus Model Result B by technology.</p>
+<div class="chart-wrap"><canvas id="compare-buildout-net"></canvas></div></article></section><section class="method"><h2>Comparison notes</h2>
+<ul id="method-notes"></ul></section></main><footer class="footer downloads-footer"><div class="shell download-section"><div><p class="eyebrow">Data exports</p><h2>Download Results</h2><p>Download a standardized Excel workbook for each model result.</p></div><div class="download-links"><a href="downloads/epri-results.xlsx" download>EPRI results <span>.xlsx</span></a><a href="downloads/genx-kmeans-myopic-results.xlsx" download>GenX (K-means; myopic) <span>.xlsx</span></a><a href="downloads/genx-sampled-weeks-myopic-results.xlsx" download>GenX (sampled weeks; myopic) <span>.xlsx</span></a></div></div></footer><script src="data/results-data.js"></script><script src="app.js"></script>
+</body>
+</html>
