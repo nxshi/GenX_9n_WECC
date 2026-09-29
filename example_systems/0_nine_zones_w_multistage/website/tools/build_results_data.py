@@ -15,7 +15,6 @@ from pathlib import Path
 import pandas as pd
 
 YEARS = [2025, 2030, 2035, 2040, 2045]
-EPRI_WEEK_WEIGHT = 4
 
 TECH_ORDER = [
     "Biomass", "Geothermal", "Hydro", "Nuclear", "Coal", "NGCC", "Peaker",
@@ -323,22 +322,20 @@ def epri_scenario(case_root: Path, weeks):
         }
         year_generation = generation[generation["DateTime"].astype(str).str[:4] == str(year)].reset_index(drop=True)
         generation_mix = defaultdict(float)
-        for position, week in enumerate(weeks):
+        for position, _ in enumerate(weeks):
             week_frame = year_generation.iloc[position * 168:(position + 1) * 168]
             for column in week_frame.columns[1:]:
                 technology = tech_group(column)
                 if technology:
-                    generation_mix[technology] += (
-                        week_frame[column].fillna(0).sum() * EPRI_WEEK_WEIGHT / 1000.0
-                    )
+                    generation_mix[technology] += week_frame[column].fillna(0).sum() / 1000.0
         year_emissions = emissions[emissions["Year"] == year]
         emissions_breakdown = {}
         for area, area_frame in year_emissions.groupby("Area"):
-            weighted = 0.0
-            for position, week in enumerate(weeks):
+            annual_sum = 0.0
+            for position, _ in enumerate(weeks):
                 week_frame = area_frame.iloc[position * 168:(position + 1) * 168]
-                weighted += week_frame["vAreaEmission"].fillna(0).sum() * EPRI_WEEK_WEIGHT
-            emissions_breakdown[str(area)] = clean_number(weighted)
+                annual_sum += week_frame["vAreaEmission"].fillna(0).sum()
+            emissions_breakdown[str(area)] = clean_number(annual_sum)
         years.append({
             "year": year,
             "cost_total": clean_number(cost_row["Total"]),
@@ -371,7 +368,7 @@ def epri_scenario(case_root: Path, weeks):
         "source": "EPRI delivered Results_EPRI.xlsb",
         "profile_note": "Generation is from the EPRI workbook. Demand is matched from Demand.csv by timestamp.",
         "capacity_note": "Cumulative net buildout (GW): additions minus retirements. Installed capacity uses the common starting fleet plus this net change.",
-        "emissions_note": "Annual emissions (million tonnes) reconstructed from representative-week area emissions using a fixed weight of four weeks per EPRI representative week.",
+        "emissions_note": "Annual emissions (million tonnes) summed directly from the EPRI representative-week area emissions with no additional week weighting.",
         "weeks": weeks,
         "years": years,
     }
