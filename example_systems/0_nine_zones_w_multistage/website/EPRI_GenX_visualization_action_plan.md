@@ -24,7 +24,7 @@ files; those are marked "to confirm with EPRI".
 | 8 | EPRI installed capacity uses a GenX run as its starting fleet | Fragile dependency | Correct today, could break silently | Fixed |
 | 9 | Period weights hard-coded, and one stage's weeks used for all years | Script bug | 0.3% low (sampled); k-means weeks mislabelled 2030–2045 | Fixed |
 | 10 | k-means GenX run predates fixes 2–3 | Stale data | k-means line not comparable | Needs re-run |
-| 11 | Public site, download workbooks not updated | Stale publish | Public site shows old numbers | After fixes |
+| 11 | Public site, download workbooks not updated | Stale publish | Public site shows old numbers | Automatic on push to `main` |
 
 Items 4–9 were fixed in `build_results_data.py` on 2026-09-29 and checked
 against independent rebuilds from the raw files (all checks pass; see "Step 4"
@@ -44,11 +44,15 @@ later years look like real modeling differences, not reporting problems (see
    `Period_map.csv`).
 2. `dist/index.html` / `compare.html` + `app.js` draw Chart.js charts from
    that dataset. No build step.
-3. `tools/build_download_workbooks.mjs` builds the `.xlsx` downloads; it needs
-   `@oai/artifact-tool`, so it only runs in the Codex/ChatGPT environment.
-4. `.openai/hosting.json` links `dist/` to a ChatGPT Sites project. A GitHub
-   push does **not** update the public site; someone with Sites access must
-   republish.
+3. `tools/build_download_workbooks.py` builds the `.xlsx` downloads from the
+   dataset (added by Nicole, replacing the Codex-only `.mjs` script).
+4. `.github/workflows/results-website.yml` (added by Nicole) runs on every
+   push to `main` that touches the case inputs, results, or website:
+   - rebuilds the dataset and downloads;
+   - commits them back to `main` as "Refresh model results website data";
+   - publishes `dist/` to GitHub Pages (https://nxshi.github.io/GenX_9n_WECC/).
+
+   Pull after pushing, since the workflow adds a commit.
 
 Where each number comes from, and whether the raw values already include the
 period weights:
@@ -323,12 +327,13 @@ CO₂ emissions (Mt, annual): EPRI 61.7 (2025) → 69.0 (2045); GenX 60.3 → 12
 
 - **k-means run is stale** (predates fixes 2–3). Re-run it, or drop it from
   the site until it is re-run.
-- **Uncommitted/unpublished:** local `dist/data/results-data.js` and the
-  `results_sampled_myopic/` outputs are modified but not committed; the public
-  site and `dist/downloads/*.xlsx` still show old numbers.
 - **Model names are hard-coded** in `main()` of the builder, the download
-  links in `index.html`, and `fileNames` in `build_download_workbooks.mjs`;
-  the README mentions only the first.
+  links in `index.html` / `compare.html`, and `FILE_NAMES` in
+  `build_download_workbooks.py`; the README mentions only the first.
+- **Side-by-side weekly profiles (compare page) pair models by week index.**
+  The same index can be a different calendar week in each model, since
+  K-means picks its own weeks every year. Each panel's subtitle now names its
+  calendar week and flags when the two differ.
 - **README commands are Mac/Linux-only** (`python3`, `source .venv/bin/activate`).
   On Windows: `python tools/build_results_data.py --case-root .. --output dist/data/results-data.js`.
 - **EPRI's representative weeks.** The documentation says EPRI used "the first
@@ -345,7 +350,9 @@ CO₂ emissions (Mt, annual): EPRI 61.7 (2025) → 69.0 (2045); GenX 60.3 → 12
 **Step 1: Send questions to EPRI (Sean Ericson) and Nicole.** _Not yet sent._
 - Is `vAreaEmission` already weighted (item 4)?
 - Is `System Cost` = annual cost × 5-year PV factor × discount to 2025 (item 5)?
-- Which representative weeks, and what weights, did EPRI use (item 9)?
+- Which representative weeks, and what weights, did EPRI use (item 9)? In
+  particular, is each hour weighted by 4 (52 weeks) or 8760/2184 = 4.011
+  (full year)? The site uses 4.011 to match GenX; the difference is 0.27%.
 - Is the ~60 Mt footprint (California + neighbours, 1.26 GW coal) the
   intended scope?
 
@@ -405,11 +412,20 @@ dataset:
 **Step 6: Re-run the k-means GenX case** with current inputs (after fixes
 2–3), or remove it from the site until then.
 
-**Step 7: Commit and publish.**
-- Commit the script, data, `app.js`, `compare.html`, and both documents.
-- Rebuild the download workbooks (Codex environment only). Until then the
-  `.xlsx` downloads still hold the old numbers.
-- Have someone with Sites access republish `dist/`.
+**Step 7: Commit and publish.** _Merged with Nicole's 14 commits on branch
+`reporting-fixes`; ready to push._
+- Merge resolution:
+  - Our `build_results_data.py` kept. Nicole's version had the same emissions
+    fix, a flat ×4 for generation, and GenX costs from `costs_multi_stage.csv`
+    (equal to `cTotal` for myopic runs); ours covers all of these.
+  - Her `.mjs` → `.py` download builder kept, with our changes ported in:
+    per-year weeks, annual-cost labels, "as reported" column.
+  - `app.js`: all her new compare charts kept, plus our per-year weeks,
+    `$M/yr` labels, and calendar-week subtitles on the side-by-side profiles.
+- Data and downloads rebuilt locally; verification passes; both pages checked
+  in a browser.
+- Pushing to `main` triggers the GitHub Pages workflow, which republishes the
+  site and rebuilds the downloads automatically.
 
 **Step 8: Return to the modeling questions.** Why does GenX run more gas and
 build less solar/storage? Isolate the causes one at a time:

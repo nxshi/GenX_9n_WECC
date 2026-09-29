@@ -14,10 +14,32 @@
   function stackDatasets(rows, field, unit) { const active = data.technologies.filter(tech => rows.some(row => (row[field]||{})[tech])); return active.map((tech, index) => ({label:tech,data:rows.map(row => row[field][tech] || 0),backgroundColor:colors([tech])[0],borderColor:colors([tech])[0],borderWidth:1,stack:"total"})); }
   const slugify = value => value.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
   function downloadBlob(blob, fileName) { const url=URL.createObjectURL(blob); const link=document.createElement("a"); link.href=url; link.download=fileName; document.body.append(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000); }
-  function chartFileName(id, extension) { const title=document.getElementById(id)?.closest(".card")?.querySelector("h2")?.textContent || id; return `${slugify(title)}.${extension}`; }
+  function chartFileName(id, extension) { const chartContainer=document.getElementById(id)?.closest(".chart-panel,.card"); const title=chartContainer?.querySelector("h2")?.textContent || id; return `${slugify(title)}.${extension}`; }
   function downloadChartPng(id) { const chart=charts[id]; if(!chart)return; const source=chart.canvas, canvas=document.createElement("canvas"); canvas.width=source.width; canvas.height=source.height; const context=canvas.getContext("2d"); context.fillStyle="#0d1b36"; context.fillRect(0,0,canvas.width,canvas.height); context.drawImage(source,0,0); canvas.toBlob(blob=>blob&&downloadBlob(blob,chartFileName(id,"png")),"image/png"); }
-  function downloadChartCsv(id) { const chart=charts[id]; if(!chart)return; const escape=value=>{const text=value==null?"":String(value);return /[",\n]/.test(text)?`"${text.replace(/"/g,'""')}"`:text;}; const axis=id==="profile"?"Hour":"Model year"; const headers=[axis,...chart.data.datasets.map(dataset=>dataset.label||"Series")]; const rows=chart.data.labels.map((label,index)=>[label,...chart.data.datasets.map(dataset=>dataset.data[index]??"")]); const csv=[headers,...rows].map(row=>row.map(escape).join(",")).join("\r\n"); downloadBlob(new Blob(["\ufeff",csv],{type:"text/csv;charset=utf-8"}),chartFileName(id,"csv")); }
-  function addChartDownloads() { document.querySelectorAll(".card canvas").forEach(canvas=>{ const card=canvas.closest(".card"); if(card.querySelector(".chart-downloads"))return; const title=card.querySelector("h2")?.textContent||"chart", controls=document.createElement("div"); controls.className="chart-downloads"; controls.innerHTML=`<span>Download this chart</span><button type="button" data-format="png" aria-label="Download ${title} as PNG">PNG</button><button type="button" data-format="csv" aria-label="Download ${title} data as CSV">CSV</button>`; controls.addEventListener("click",event=>{const button=event.target.closest("button");if(!button)return;button.dataset.format==="png"?downloadChartPng(canvas.id):downloadChartCsv(canvas.id);}); card.append(controls); }); }
+  function downloadChartCsv(id) { const chart=charts[id]; if(!chart)return; const escape=value=>{const text=value==null?"":String(value);return /[",\n]/.test(text)?`"${text.replace(/"/g,'""')}"`:text;}; const axis=id.includes("profile")?"Hour":"Model year"; const headers=[axis,...chart.data.datasets.map(dataset=>dataset.label||"Series")]; const rows=chart.data.labels.map((label,index)=>[label,...chart.data.datasets.map(dataset=>dataset.data[index]??"")]); const csv=[headers,...rows].map(row=>row.map(escape).join(",")).join("\r\n"); downloadBlob(new Blob(["\ufeff",csv],{type:"text/csv;charset=utf-8"}),chartFileName(id,"csv")); }
+  function addChartDownloads() { document.querySelectorAll(".card canvas").forEach(canvas=>{ const container=canvas.closest(".chart-panel,.card"); if(container.querySelector(":scope > .chart-downloads"))return; const title=container.querySelector("h2")?.textContent||"chart", controls=document.createElement("div"); controls.className="chart-downloads"; controls.innerHTML=`<span>Download this chart</span><button type="button" data-format="png" aria-label="Download ${title} as PNG">PNG</button><button type="button" data-format="csv" aria-label="Download ${title} data as CSV">CSV</button>`; controls.addEventListener("click",event=>{const button=event.target.closest("button");if(!button)return;button.dataset.format==="png"?downloadChartPng(canvas.id):downloadChartCsv(canvas.id);}); container.append(controls); }); }
+  function renderWeeklyProfile(chartId, selected, selectedYearValue, selectedWeekValue) {
+    const selectedYear = selected.years.find(row => row.year === Number(selectedYearValue)) || selected.years.at(-1);
+    const selectedWeek = Number(selectedWeekValue);
+    const profile = (selectedYear.profiles || []).find(row=>row.week===selectedWeek);
+    const points = profile ? profile.points : [];
+    const technologies = data.technologies.filter(tech=>points.some(point=>point.generation[tech]));
+    const profileSets = technologies.map(tech=>({label:tech,data:points.map(point=>point.generation[tech]||0),borderColor:colors([tech])[0],backgroundColor:colors([tech])[0],fill:true,pointRadius:0,borderWidth:1,stack:"generation",tension:.12}));
+    if (points.some(point=>point.demand!=null)) profileSets.push({label:"Demand",data:points.map(point=>point.demand),borderColor:"#ffffff",backgroundColor:"transparent",fill:false,pointRadius:0,borderWidth:4,order:-100,stack:"demand",tension:.1});
+    lineChart(chartId,points.map(point=>point.hour),profileSets,{stacked:true,unit:"GW",xTitle:"Hours",tooltipTitle:"Hour"});
+    return {year:selectedYear.year,week:(selectedYear.weeks||selected.weeks).find(row=>row.index===selectedWeek)};
+  }
+  function synchronizeYAxis(...chartIds) {
+    const activeCharts=chartIds.map(id=>charts[id]).filter(Boolean);
+    if(activeCharts.length<2)return;
+    const minimum=Math.min(...activeCharts.map(chart=>chart.scales.y.min));
+    const maximum=Math.max(...activeCharts.map(chart=>chart.scales.y.max));
+    activeCharts.forEach(chart=>{
+      chart.options.scales.y.min=minimum;
+      chart.options.scales.y.max=maximum;
+      chart.update();
+    });
+  }
   function explorer() {
     const scenarioSelect = document.getElementById("scenario"), yearSelect = document.getElementById("profile-year"), weekSelect = document.getElementById("week");
     const topControls = scenarioSelect.closest(".controls");
@@ -71,14 +93,7 @@
     populateSelect(scenarioSelect,data.scenarios.map(item=>({value:item.id,label:item.label})),"epri");
     const renderProfile = () => {
       const selected = scenario(scenarioSelect.value);
-      const selectedYear = selected.years.find(row => row.year === Number(yearSelect.value)) || selected.years.at(-1);
-      const selectedWeek = Number(weekSelect.value);
-      const profile = (selectedYear.profiles || []).find(row=>row.week===selectedWeek);
-      const points = profile ? profile.points : [];
-      const technologies = data.technologies.filter(tech=>points.some(point=>point.generation[tech]));
-      const profileSets = technologies.map(tech=>({label:tech,data:points.map(point=>point.generation[tech]||0),borderColor:colors([tech])[0],backgroundColor:colors([tech])[0],fill:true,pointRadius:0,borderWidth:1,stack:"generation",tension:.12}));
-      if (points.some(point=>point.demand!=null)) profileSets.push({label:"Demand",data:points.map(point=>point.demand),borderColor:"#ffffff",backgroundColor:"transparent",fill:false,pointRadius:0,borderWidth:4,order:-100,stack:"demand",tension:.1});
-      lineChart("profile",points.map(point=>point.hour),profileSets,{stacked:true,unit:"GW",xTitle:"Hours",tooltipTitle:"Hour"});
+      renderWeeklyProfile("profile",selected,yearSelect.value,weekSelect.value);
     };
     // Representative weeks can differ by model year (K-means clusters each year separately).
     const populateWeeks = () => {
@@ -111,10 +126,15 @@
     const checks = document.getElementById("scenario-checks");
     const scenarioASelect = document.getElementById("net-scenario-a");
     const scenarioBSelect = document.getElementById("net-scenario-b");
+    const profileYearSelect = document.getElementById("compare-profile-year");
+    const profileWeekSelect = document.getElementById("compare-profile-week");
     const stored = JSON.parse(localStorage.getItem("wecc-visible-scenarios") || "null"); let visible = new Set(stored || data.scenarios.map(item=>item.id));
     const scenarioOptions = data.scenarios.map(item=>({value:item.id,label:item.label}));
     populateSelect(scenarioASelect,scenarioOptions,data.scenarios[0]?.id);
     populateSelect(scenarioBSelect,scenarioOptions,data.scenarios.at(-1)?.id);
+    populateSelect(profileYearSelect,data.years.map(year=>({value:year,label:year})),data.years.at(-1));
+    const weekIndices = [...new Set(data.scenarios.flatMap(item=>item.weeks.map(week=>week.index)))].sort((a,b)=>a-b);
+    populateSelect(profileWeekSelect,weekIndices.map(index=>({value:index,label:`Week ${index}`})),weekIndices[0]);
     const rowForYear = (item, year) => item.years.find(row=>row.year===year) || {};
     const netDatasets = (scenarioA, scenarioB, keys, field, colorFor) => keys.map((key,index)=>({
       label:key,
@@ -128,6 +148,23 @@
       lineChart("compare-cost-all",data.years,lines(row=>row.cost_total),{unit:"$M/yr (2025 dollars)"});
       lineChart("compare-emissions-all",data.years,lines(row=>row.emissions_total),{unit:"Mt CO₂"});
       lineChart("compare-buildout-all",data.years,lines(row=>sumValues(row.capacity_mix)),{unit:"GW"});
+      lineChart("compare-generation-all",data.years,lines(row=>sumValues(row.generation_mix)),{unit:"TWh"});
+    };
+    const renderComparisonProfiles = () => {
+      const scenarioA = scenario(scenarioASelect.value);
+      const scenarioB = scenario(scenarioBSelect.value);
+      const shownA = renderWeeklyProfile("compare-profile-a",scenarioA,profileYearSelect.value,profileWeekSelect.value);
+      const shownB = renderWeeklyProfile("compare-profile-b",scenarioB,profileYearSelect.value,profileWeekSelect.value);
+      synchronizeYAxis("compare-profile-a","compare-profile-b");
+      document.getElementById("compare-profile-a-title").textContent = `Weekly Generation Profile A: ${scenarioA.label}`;
+      document.getElementById("compare-profile-b-title").textContent = `Weekly Generation Profile B: ${scenarioB.label}`;
+      // The same week index can be a different calendar week in each model result
+      // (K-means picks its own weeks for every model year), so name the calendar week.
+      const weekNote = shown => shown.week ? `Calendar week ${shown.week.source_week} (represents ${shown.week.weight} week${shown.week.weight===1?"":"s"}). ` : "";
+      const sameWeek = shownA.week && shownB.week && shownA.week.source_week === shownB.week.source_week;
+      const differs = sameWeek ? "" : "Different calendar week from the other panel. ";
+      document.getElementById("compare-profile-a-sub").textContent = `${weekNote(shownA)}${differs}Hourly generation by technology with demand.`;
+      document.getElementById("compare-profile-b-sub").textContent = `${weekNote(shownB)}${differs}Hourly generation by technology with demand.`;
     };
     const renderPairwiseCharts = () => {
       const scenarioA = scenario(scenarioASelect.value);
@@ -136,10 +173,13 @@
       document.getElementById("compare-cost-net-title").textContent = `Net System Cost: ${direction}`;
       document.getElementById("compare-emissions-net-title").textContent = `Net CO₂ Emissions: ${direction}`;
       document.getElementById("compare-buildout-net-title").textContent = `Net Cumulative Buildout: ${direction}`;
+      document.getElementById("compare-generation-net-title").textContent = `Net Generation Mix: ${direction}`;
       barChart("compare-cost-net",data.years,netDatasets(scenarioA,scenarioB,data.cost_components,"cost_breakdown",(key,index)=>palette[index%palette.length]),{stacked:true,unit:"$M/yr (2025 dollars)"});
       const regions = [...new Set([...scenarioA.years,...scenarioB.years].flatMap(row=>Object.keys(row.emissions_breakdown||{})))];
       barChart("compare-emissions-net",data.years,netDatasets(scenarioA,scenarioB,regions,"emissions_breakdown",(key,index)=>palette[index%palette.length]),{stacked:true,unit:"Mt CO₂"});
       barChart("compare-buildout-net",data.years,netDatasets(scenarioA,scenarioB,data.technologies,"capacity_mix",key=>data.technology_colors[key]),{stacked:true,unit:"GW"});
+      barChart("compare-generation-net",data.years,netDatasets(scenarioA,scenarioB,data.technologies,"generation_mix",key=>data.technology_colors[key]),{stacked:true,unit:"TWh"});
+      renderComparisonProfiles();
     };
     checks.innerHTML = data.scenarios.map(item=>`<label class="scenario-check"><input type="checkbox" value="${item.id}" ${visible.has(item.id)?"checked":""}><span>${item.label}</span></label>`).join("");
     checks.querySelectorAll("input").forEach(input=>input.addEventListener("change",()=>{
@@ -158,6 +198,8 @@
     };
     scenarioASelect.addEventListener("change",()=>keepDistinct(scenarioASelect));
     scenarioBSelect.addEventListener("change",()=>keepDistinct(scenarioBSelect));
+    profileYearSelect.addEventListener("change",renderComparisonProfiles);
+    profileWeekSelect.addEventListener("change",renderComparisonProfiles);
     const notes=document.getElementById("method-notes");
     if(data.method_notes.length) notes.innerHTML=data.method_notes.map(note=>`<li>${note}</li>`).join("");
     else notes.closest(".method")?.remove();
