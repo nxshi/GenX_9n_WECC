@@ -17,13 +17,15 @@ load time (src/load_inputs/load_generators_variability.jl: any RESOURCE_NAME
 not already a column gets ensure_column!(gen_var, r, 1.0)), so dispatchable
 resources need no entry there.
 
-Two modeling choices below are PENDING sign-off from the project lead and are
-marked as such inline:
-  - Storage round-trip efficiency (a single value in the source) is split
-    symmetrically via sqrt() into Eff_Up/Eff_Down.
-  - Hydro is written as GenX's Hydro.csv resource type with
-    Hydro_Energy_to_Power_Ratio = 0 (pure run-of-river, no reservoir), since
-    the source provides no reservoir-size data for hydro.
+Storage efficiency (Eff_Up/Eff_Down) and hydro treatment were previously
+PENDING project-lead sign-off; both are now confirmed by EPRI (System
+notes.docx) and implemented accordingly below:
+  - Storage: the source's single round-trip Efficiency is applied entirely
+    on the charge leg (Eff_Up=Efficiency, Eff_Down=1), matching EPRI's own
+    model exactly, not our earlier symmetric sqrt() split.
+  - Hydro: GenX's Hydro.csv resource type with Hydro_Energy_to_Power_Ratio=0
+    (pure run-of-river, no reservoir) — EPRI confirmed this matches their
+    own "simple run of river approach."
 """
 from __future__ import annotations
 
@@ -212,10 +214,15 @@ def build_storage_row(row: dict[str, str], zone: int, year: str,
     max_power = float(row["MaximumPower"])
     max_energy = float(row["MaximumStorage"])
     duration = fmt(max_energy / max_power)
+    # EPRI confirmed (System notes.docx) their own model applies the source's
+    # single round-trip Efficiency entirely on the charge leg: 1 MWh charged
+    # yields Efficiency MWh stored, then 100% of that is recoverable on
+    # discharge. Match that convention exactly rather than our earlier
+    # symmetric sqrt() split (mathematically equivalent round-trip here since
+    # Reg_Max/Rsv_Max are 0 everywhere, but no reason to differ now that
+    # EPRI's own split is known).
     round_trip_eff = float(row["Efficiency"])
-    # PENDING project-lead sign-off: symmetric sqrt() split of the source's
-    # single round-trip efficiency into charge/discharge legs.
-    leg_eff = fmt(round_trip_eff ** 0.5)
+    eff_up, eff_down = fmt(round_trip_eff), "1"
     return {
         "Resource": unit,
         "Zone": zone,
@@ -240,8 +247,8 @@ def build_storage_row(row: dict[str, str], zone: int, year: str,
         "Var_OM_Cost_per_MWh": row["OMVariableCost"] or "0",
         "Var_OM_Cost_per_MWh_In": 0,
         "Self_Disch": 0,
-        "Eff_Up": leg_eff,
-        "Eff_Down": leg_eff,
+        "Eff_Up": eff_up,
+        "Eff_Down": eff_down,
         "Min_Duration": duration,
         "Max_Duration": duration,
         "Reg_Max": 0,
