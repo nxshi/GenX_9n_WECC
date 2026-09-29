@@ -15,6 +15,7 @@ from pathlib import Path
 import pandas as pd
 
 YEARS = [2025, 2030, 2035, 2040, 2045]
+EPRI_WEEK_WEIGHT = 4
 
 TECH_ORDER = [
     "Biomass", "Geothermal", "Hydro", "Nuclear", "Coal", "NGCC", "Peaker",
@@ -327,14 +328,16 @@ def epri_scenario(case_root: Path, weeks):
             for column in week_frame.columns[1:]:
                 technology = tech_group(column)
                 if technology:
-                    generation_mix[technology] += week_frame[column].fillna(0).sum() * week["weight"] / 1000.0
+                    generation_mix[technology] += (
+                        week_frame[column].fillna(0).sum() * EPRI_WEEK_WEIGHT / 1000.0
+                    )
         year_emissions = emissions[emissions["Year"] == year]
         emissions_breakdown = {}
         for area, area_frame in year_emissions.groupby("Area"):
             weighted = 0.0
             for position, week in enumerate(weeks):
                 week_frame = area_frame.iloc[position * 168:(position + 1) * 168]
-                weighted += week_frame["vAreaEmission"].fillna(0).sum() * week["weight"]
+                weighted += week_frame["vAreaEmission"].fillna(0).sum() * EPRI_WEEK_WEIGHT
             emissions_breakdown[str(area)] = clean_number(weighted)
         years.append({
             "year": year,
@@ -368,7 +371,7 @@ def epri_scenario(case_root: Path, weeks):
         "source": "EPRI delivered Results_EPRI.xlsb",
         "profile_note": "Generation is from the EPRI workbook. Demand is matched from Demand.csv by timestamp.",
         "capacity_note": "Cumulative net buildout (GW): additions minus retirements. Installed capacity uses the common starting fleet plus this net change.",
-        "emissions_note": "Annual emissions (million tonnes) reconstructed from representative-period area emissions and period-map weights.",
+        "emissions_note": "Annual emissions (million tonnes) reconstructed from representative-week area emissions using a fixed weight of four weeks per EPRI representative week.",
         "weeks": weeks,
         "years": years,
     }
