@@ -158,13 +158,22 @@ def genx_profile(power_path: Path, charge_path: Path, balance_path: Path, weeks)
 
 def genx_scenario(case_root: Path, directory: str, scenario_id: str, label: str, weeks):
     scenario_root = case_root / directory
+    multistage_costs = pd.read_csv(scenario_root / "costs_multi_stage.csv")
+    multistage_costs_by_name = multistage_costs.set_index("Costs")
     years = []
     cumulative_build = defaultdict(float)
     cumulative_retirement = defaultdict(float)
     for stage, year in enumerate(YEARS, start=1):
         stage_root = scenario_root / f"results_p{stage}"
-        costs = pd.read_csv(stage_root / "costs.csv")
-        costs_by_name = dict(zip(costs["Costs"], costs["Total"]))
+        cost_column = f"TotalCosts_p{stage}"
+        if cost_column not in multistage_costs_by_name.columns:
+            raise ValueError(
+                f"Missing {cost_column} in {scenario_root / 'costs_multi_stage.csv'}"
+            )
+        costs_by_name = multistage_costs_by_name[cost_column].to_dict()
+        cost_total = pd.to_numeric(
+            multistage_costs_by_name[cost_column], errors="coerce"
+        ).fillna(0).sum()
         capacity = pd.read_csv(stage_root / "capacity.csv")
         for row in capacity.itertuples(index=False):
             technology = tech_group(row.Resource)
@@ -192,7 +201,7 @@ def genx_scenario(case_root: Path, directory: str, scenario_id: str, label: str,
         zone_breakdown = {region: clean_number(value) for region, value in zone_emissions.items()}
         years.append({
             "year": year,
-            "cost_total": clean_number(costs_by_name.get("cTotal", 0) / 1e6),
+            "cost_total": clean_number(cost_total / 1e6),
             "cost_breakdown": {
                 "Fixed O&M": clean_number(costs_by_name.get("cFix", 0) / 1e6),
                 "Variable O&M": clean_number(sum(
@@ -202,7 +211,7 @@ def genx_scenario(case_root: Path, directory: str, scenario_id: str, label: str,
                 "Emissions": clean_number(costs_by_name.get("cCO2", 0) / 1e6),
                 "Reliability / NSE": clean_number(costs_by_name.get("cNSE", 0) / 1e6),
                 "Other / residual": clean_number((
-                    costs_by_name.get("cTotal", 0)
+                    cost_total
                     - costs_by_name.get("cFix", 0)
                     - sum(costs_by_name.get(name, 0) for name in ("cVar", "cFuel", "cStart"))
                     - costs_by_name.get("cNetworkExp", 0)
@@ -327,7 +336,10 @@ def epri_scenario(case_root: Path, weeks):
             for column in week_frame.columns[1:]:
                 technology = tech_group(column)
                 if technology:
-                    generation_mix[technology] += week_frame[column].fillna(0).sum() / 1000.0
+                    # The EPRI workbook provides 13 sampled weeks. Each sampled week
+                    # represents four calendar weeks, so annualize the summed hourly
+                    # generation before converting GWh to TWh.
+                    generation_mix[technology] += week_frame[column].fillna(0).sum() * 4 / 1000.0
         year_emissions = emissions[emissions["Year"] == year]
         emissions_breakdown = {}
         for area, area_frame in year_emissions.groupby("Area"):
@@ -403,7 +415,10 @@ def main():
                 "Variable O&M combines GenX variable O&M, fuel, and startup costs."
             ),
             "buildout": "Cumulative net buildout equals additions minus retirements.",
-            "generation": "GenX annual generation is converted from MWh to TWh.",
+            "generation": (
+                "GenX annual generation is converted from MWh to TWh. EPRI annual generation "
+                "is annualized by multiplying the 13 sampled-week total by four."
+            ),
             "emissions": (
                 "GenX emissions for IID, LADWP, NCNC, PGE, SCE, and SDGE are aggregated into CAISO "
                 "to match the four EPRI reporting regions."
