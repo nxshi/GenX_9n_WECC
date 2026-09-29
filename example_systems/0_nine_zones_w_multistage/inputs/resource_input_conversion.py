@@ -2,9 +2,9 @@
 """Populate GenX resource inputs from the WECC-9n Generation.csv delivery.
 
 Companion to system_input_conversion.py: that script converts the four
-`system` tables, this one converts Generation.csv (plus Retirements.csv and
-AreaConstraints.csv) into the `resources` tables for each inputs_p1..
-inputs_p5 stage:
+`system` tables, this one converts Generation.csv (plus Retirements.csv,
+AreaConstraints.csv, and LearningRates.csv) into the `resources` tables for
+each inputs_p1..inputs_p5 stage:
 
 - resources/Thermal.csv, Vre.csv, Storage.csv, Hydro.csv
 - resources/Resource_multistage_data.csv
@@ -104,10 +104,24 @@ def fmt(value: float) -> str:
     return str(int(value)) if float(value).is_integer() else str(round(value, 6))
 
 
-def annualized_investment_cost(row: dict[str, str]) -> float:
+def compute_learning_rates(learning_rate_rows: list[dict[str, str]]) -> dict[str, dict[str, float]]:
+    """tech -> year -> multiplier on base FixedInvestmentCost (doc section 4.3)."""
+    rates: dict[str, dict[str, float]] = defaultdict(dict)
+    for row in learning_rate_rows:
+        year = row["Year"]
+        for tech, multiplier in row.items():
+            if tech == "Year":
+                continue
+            rates[tech][year] = float(multiplier)
+    return rates
+
+
+def annualized_investment_cost(row: dict[str, str], year: str,
+                                learning_rates: dict[str, dict[str, float]]) -> float:
     if not is_candidate(row["Unit"]):
         return 0.0
-    return float(row["FixedInvestmentCost"]) * 1000 * float(row["FixedChargeRate"])
+    multiplier = learning_rates.get(row["Technology"], {}).get(year, 1.0)
+    return float(row["FixedInvestmentCost"]) * 1000 * float(row["FixedChargeRate"]) * multiplier
 
 
 def compute_retirement_schedule(retirement_rows: list[dict[str, str]]) -> dict[str, dict[str, float]]:
@@ -130,7 +144,8 @@ def min_retired_capacity(schedule: dict[str, dict[str, float]], unit: str, year:
     return max(current - previous, 0.0) * nameplate
 
 
-def build_thermal_row(row: dict[str, str], zone: int) -> dict[str, object]:
+def build_thermal_row(row: dict[str, str], zone: int, year: str,
+                       learning_rates: dict[str, dict[str, float]]) -> dict[str, object]:
     unit, node, tech = row["Unit"], row["Node"], row["Technology"]
     candidate = is_candidate(unit)
     fuel = REVERSE_FUEL_MAP.get((node, tech), "None")
@@ -143,7 +158,7 @@ def build_thermal_row(row: dict[str, str], zone: int) -> dict[str, object]:
         "Existing_Cap_MW": "0" if candidate else row["MaximumPower"],
         "Max_Cap_MW": row["MaximumPower"] if candidate else "-1",
         "Min_Cap_MW": "-1",
-        "Inv_Cost_per_MWyr": fmt(annualized_investment_cost(row)),
+        "Inv_Cost_per_MWyr": fmt(annualized_investment_cost(row, year, learning_rates)),
         "Fixed_OM_Cost_per_MWyr": fmt(float(row["OMFixedCost"]) * 1000),
         "Var_OM_Cost_per_MWh": row["OMVariableCost"],
         "Heat_Rate_MMBTU_per_MWh": row["LinearTerm"] or "0",
@@ -165,7 +180,8 @@ def build_thermal_row(row: dict[str, str], zone: int) -> dict[str, object]:
     }
 
 
-def build_vre_row(row: dict[str, str], zone: int) -> dict[str, object]:
+def build_vre_row(row: dict[str, str], zone: int, year: str,
+                   learning_rates: dict[str, dict[str, float]]) -> dict[str, object]:
     unit, node = row["Unit"], row["Node"]
     candidate = is_candidate(unit)
     return {
@@ -177,7 +193,7 @@ def build_vre_row(row: dict[str, str], zone: int) -> dict[str, object]:
         "Existing_Cap_MW": "0" if candidate else row["MaximumPower"],
         "Max_Cap_MW": row["MaximumPower"] if candidate else "-1",
         "Min_Cap_MW": "-1",
-        "Inv_Cost_per_MWyr": fmt(annualized_investment_cost(row)),
+        "Inv_Cost_per_MWyr": fmt(annualized_investment_cost(row, year, learning_rates)),
         "Fixed_OM_Cost_per_MWyr": fmt(float(row["OMFixedCost"]) * 1000),
         "Var_OM_Cost_per_MWh": row["OMVariableCost"] or "0",
         "Reg_Max": 0,
@@ -189,7 +205,8 @@ def build_vre_row(row: dict[str, str], zone: int) -> dict[str, object]:
     }
 
 
-def build_storage_row(row: dict[str, str], zone: int) -> dict[str, object]:
+def build_storage_row(row: dict[str, str], zone: int, year: str,
+                       learning_rates: dict[str, dict[str, float]]) -> dict[str, object]:
     unit, node = row["Unit"], row["Node"]
     candidate = is_candidate(unit)
     max_power = float(row["MaximumPower"])
@@ -211,7 +228,7 @@ def build_storage_row(row: dict[str, str], zone: int) -> dict[str, object]:
         "Max_Cap_MWh": row["MaximumStorage"] if candidate else "-1",
         "Min_Cap_MW": "-1",
         "Min_Cap_MWh": "-1",
-        "Inv_Cost_per_MWyr": fmt(annualized_investment_cost(row)),
+        "Inv_Cost_per_MWyr": fmt(annualized_investment_cost(row, year, learning_rates)),
         # The source gives one $/kW figure and a fixed energy/power ratio per
         # unit (every storage record's MaximumStorage/MaximumPower ratio is
         # constant) rather than separate power/energy costs, so the full
@@ -303,6 +320,7 @@ def main() -> int:
     generation_fields, generation_rows = read_csv(source / "Generation.csv")
     _, retirement_rows = read_csv(source / "Retirements.csv")
     _, area_rows = read_csv(source / "AreaConstraints.csv")
+    _, learning_rate_rows = read_csv(source / "LearningRates.csv")
 
     required_generation_fields = (
         "Unit", "Node", "Technology", "MaximumPower", "MaximumStorage", "Efficiency",
@@ -313,6 +331,7 @@ def main() -> int:
         require(field in generation_fields, f"Generation.csv is missing {field}")
     require("Year" in area_rows[0] and "Area" in area_rows[0] and "ReserveMargin" in area_rows[0],
             "AreaConstraints.csv is missing Year/Area/ReserveMargin")
+    require("Year" in learning_rate_rows[0], "LearningRates.csv is missing Year")
 
     all_techs = {row["Technology"] for row in generation_rows}
     known_techs = THERMAL_TECHS | VRE_TECHS | STORAGE_TECHS | HYDRO_TECHS
@@ -320,6 +339,7 @@ def main() -> int:
     require(all(row["Node"] in ZONE_MAP for row in generation_rows), "Generation.csv has a Node outside ZONE_MAP")
 
     schedule = compute_retirement_schedule(retirement_rows)
+    learning_rates = compute_learning_rates(learning_rate_rows)
     nameplate_mw = {row["Unit"]: float(row["MaximumPower"]) for row in generation_rows}
     nameplate_mwh = {row["Unit"]: float(row["MaximumStorage"]) for row in generation_rows
                       if row["MaximumStorage"] not in (None, "")}
@@ -347,15 +367,15 @@ def main() -> int:
             zone = zone_int(node)
 
             if tech in THERMAL_TECHS:
-                thermal_rows.append(build_thermal_row(row, zone))
+                thermal_rows.append(build_thermal_row(row, zone, year, learning_rates))
                 min_retired = min_retired_capacity(schedule, unit, year, previous_year, nameplate_mw[unit])
                 multistage_rows.append(build_multistage_row(unit, min_retired))
             elif tech in VRE_TECHS:
-                vre_rows.append(build_vre_row(row, zone))
+                vre_rows.append(build_vre_row(row, zone, year, learning_rates))
                 min_retired = min_retired_capacity(schedule, unit, year, previous_year, nameplate_mw[unit])
                 multistage_rows.append(build_multistage_row(unit, min_retired))
             elif tech in STORAGE_TECHS:
-                storage_rows.append(build_storage_row(row, zone))
+                storage_rows.append(build_storage_row(row, zone, year, learning_rates))
                 min_retired_power = min_retired_capacity(schedule, unit, year, previous_year, nameplate_mw[unit])
                 min_retired_energy = min_retired_capacity(
                     schedule, unit, year, previous_year, nameplate_mwh.get(unit, nameplate_mw[unit] * 4))
