@@ -7,7 +7,7 @@ aggregated generation data, and a 17-line transport network.
 
 ## Results website
 
-[Open the Capacity Expansion Model Comparison results website](https://wecc-genx-results-explorer.ns9524.chatgpt.site/).
+[Open the Capacity Expansion Model Comparison results website](https://nxshi.github.io/GenX_9n_WECC/).
 The editable site source, generated data, downloads, and collaborator update
 instructions are kept in [website/](website/README.md).
 
