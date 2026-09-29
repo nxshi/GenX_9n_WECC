@@ -29,6 +29,17 @@
     lineChart(chartId,points.map(point=>point.hour),profileSets,{stacked:true,unit:"GW",xTitle:"Hours",tooltipTitle:"Hour"});
     return {year:selectedYear.year,week:selected.weeks.find(row=>row.index===selectedWeek)};
   }
+  function synchronizeYAxis(...chartIds) {
+    const activeCharts=chartIds.map(id=>charts[id]).filter(Boolean);
+    if(activeCharts.length<2)return;
+    const minimum=Math.min(...activeCharts.map(chart=>chart.scales.y.min));
+    const maximum=Math.max(...activeCharts.map(chart=>chart.scales.y.max));
+    activeCharts.forEach(chart=>{
+      chart.options.scales.y.min=minimum;
+      chart.options.scales.y.max=maximum;
+      chart.update();
+    });
+  }
   function explorer() {
     const scenarioSelect = document.getElementById("scenario"), yearSelect = document.getElementById("profile-year"), weekSelect = document.getElementById("week");
     const topControls = scenarioSelect.closest(".controls");
@@ -136,12 +147,13 @@
     const renderComparisonProfiles = () => {
       const scenarioA = scenario(scenarioASelect.value);
       const scenarioB = scenario(scenarioBSelect.value);
-      const profileA = renderWeeklyProfile("compare-profile-a",scenarioA,profileYearSelect.value,profileWeekSelect.value);
-      const profileB = renderWeeklyProfile("compare-profile-b",scenarioB,profileYearSelect.value,profileWeekSelect.value);
+      renderWeeklyProfile("compare-profile-a",scenarioA,profileYearSelect.value,profileWeekSelect.value);
+      renderWeeklyProfile("compare-profile-b",scenarioB,profileYearSelect.value,profileWeekSelect.value);
+      synchronizeYAxis("compare-profile-a","compare-profile-b");
       document.getElementById("compare-profile-a-title").textContent = `Weekly Generation Profile A: ${scenarioA.label}`;
       document.getElementById("compare-profile-b-title").textContent = `Weekly Generation Profile B: ${scenarioB.label}`;
-      document.getElementById("compare-profile-a-sub").textContent = `${profileA.year} · ${profileA.week?.label || `Week ${profileWeekSelect.value}`}. Hourly generation by technology with demand.`;
-      document.getElementById("compare-profile-b-sub").textContent = `${profileB.year} · ${profileB.week?.label || `Week ${profileWeekSelect.value}`}. Hourly generation by technology with demand.`;
+      document.getElementById("compare-profile-a-sub").textContent = "Hourly generation by technology with demand.";
+      document.getElementById("compare-profile-b-sub").textContent = "Hourly generation by technology with demand.";
     };
     const renderPairwiseCharts = () => {
       const scenarioA = scenario(scenarioASelect.value);
