@@ -158,13 +158,10 @@
       synchronizeYAxis("compare-profile-a","compare-profile-b");
       document.getElementById("compare-profile-a-title").textContent = `Weekly Generation Profile A: ${scenarioA.label}`;
       document.getElementById("compare-profile-b-title").textContent = `Weekly Generation Profile B: ${scenarioB.label}`;
-      // The same week index can be a different calendar week in each model result
-      // (K-means picks its own weeks for every model year), so name the calendar week.
-      const weekNote = shown => shown.week ? `Calendar week ${shown.week.source_week} (represents ${shown.week.weight} week${shown.week.weight===1?"":"s"}). ` : "";
       const sameWeek = shownA.week && shownB.week && shownA.week.source_week === shownB.week.source_week;
       const differs = sameWeek ? "" : "Different calendar week from the other panel. ";
-      document.getElementById("compare-profile-a-sub").textContent = `${weekNote(shownA)}${differs}Hourly generation by technology with demand.`;
-      document.getElementById("compare-profile-b-sub").textContent = `${weekNote(shownB)}${differs}Hourly generation by technology with demand.`;
+      document.getElementById("compare-profile-a-sub").textContent = `${differs}Hourly generation by technology with demand.`;
+      document.getElementById("compare-profile-b-sub").textContent = `${differs}Hourly generation by technology with demand.`;
     };
     const renderPairwiseCharts = () => {
       const scenarioA = scenario(scenarioASelect.value);
