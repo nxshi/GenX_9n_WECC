@@ -134,9 +134,18 @@ def genx_profile(power_path: Path, charge_path: Path, balance_path: Path, weeks)
         points = []
         for hour in range(len(power_week)):
             generation = group_columns(power_week, hour, scale=0.001)
-            storage_charge = pd.to_numeric(
-                charge_week.iloc[hour, 1:], errors="coerce"
-            ).fillna(0).sum() * 0.001
+            # charge.csv, like power.csv, carries a trailing "Total" column that GenX
+            # writes for its own bookkeeping (not a resource). group_columns() drops it
+            # naturally because tech_group("Total") is None; a plain iloc[hour, 1:].sum()
+            # here does not, and was double-counting charge (previously ~2x true value,
+            # since Total == sum of the resource columns). Route through the same
+            # tech_group() filter so both sides are handled consistently.
+            charge_row = charge_week.iloc[hour]
+            storage_charge = sum(
+                float(value)
+                for column, value in charge_row.iloc[1:].items()
+                if tech_group(column) == "Storage" and pd.notna(value)
+            ) * 0.001
             generation["Storage"] = clean_number(generation.get("Storage", 0) - storage_charge)
             points.append({
                 "hour": hour + 1,
