@@ -34,7 +34,7 @@
     const costBreakdownCard = document.getElementById("cost-breakdown").closest(".card");
     costCard.classList.remove("wide");
     costCard.querySelector("h2").textContent = "System Cost";
-    costCard.querySelector(".sub").textContent = "Annual cost by component across model years.";
+    costCard.querySelector(".sub").textContent = "Annual (undiscounted) cost by component across model years.";
     costBreakdownCard.querySelector("h2").textContent = "Cumulative Buildout";
     costBreakdownCard.querySelector(".sub").textContent = "Cumulative additions minus retirements by technology across model years.";
     const emissionsCard = document.getElementById("emissions-total").closest(".card");
@@ -80,12 +80,18 @@
       if (points.some(point=>point.demand!=null)) profileSets.push({label:"Demand",data:points.map(point=>point.demand),borderColor:"#ffffff",backgroundColor:"transparent",fill:false,pointRadius:0,borderWidth:4,order:-100,stack:"demand",tension:.1});
       lineChart("profile",points.map(point=>point.hour),profileSets,{stacked:true,unit:"GW",xTitle:"Hours",tooltipTitle:"Hour"});
     };
+    // Representative weeks can differ by model year (K-means clusters each year separately).
+    const populateWeeks = () => {
+      const selected = scenario(scenarioSelect.value);
+      const selectedYear = selected.years.find(row => row.year === Number(yearSelect.value)) || selected.years.at(-1);
+      populateSelect(weekSelect, (selectedYear.weeks || selected.weeks).map(row=>({value:row.index,label:row.label})), weekSelect.value || 1);
+    };
     const renderScenario = () => {
       const selected = scenario(scenarioSelect.value);
       populateSelect(yearSelect, selected.years.map(row=>({value:row.year,label:row.year})), yearSelect.value || 2045);
-      populateSelect(weekSelect, selected.weeks.map(row=>({value:row.index,label:row.label})), weekSelect.value || 1);
+      populateWeeks();
       document.getElementById("summary")?.remove();
-      barChart("cost-total",years(selected),data.cost_components.map((key,index)=>({label:key,data:selected.years.map(row=>row.cost_breakdown[key]||0),backgroundColor:palette[index%palette.length],borderColor:palette[index%palette.length],borderWidth:1,stack:"cost"})),{stacked:true,unit:"$M (2025 dollars)"});
+      barChart("cost-total",years(selected),data.cost_components.map((key,index)=>({label:key,data:selected.years.map(row=>row.cost_breakdown[key]||0),backgroundColor:palette[index%palette.length],borderColor:palette[index%palette.length],borderWidth:1,stack:"cost"})),{stacked:true,unit:"$M/yr (2025 dollars)"});
       barChart("capacity-mix",years(selected),stackDatasets(selected.years,"installed_capacity","GW"),{stacked:true,unit:"GW"});
       barChart("cost-breakdown",years(selected),stackDatasets(selected.years,"capacity_mix","GW"),{stacked:true,unit:"GW"});
       barChart("generation-mix",years(selected),stackDatasets(selected.years,"generation_mix","TWh"),{stacked:true,unit:"TWh"});
@@ -97,7 +103,7 @@
       renderProfile();
     };
     scenarioSelect.addEventListener("change",()=>{yearSelect.value="";weekSelect.value="";renderScenario();});
-    yearSelect.addEventListener("change",renderProfile);
+    yearSelect.addEventListener("change",()=>{populateWeeks();renderProfile();});
     weekSelect.addEventListener("change",renderProfile);
     renderScenario();
   }
@@ -119,7 +125,7 @@
     const renderAllScenarioCharts = () => {
       const active = data.scenarios.filter(item=>visible.has(item.id));
       const lines = value => active.map(item=>{const index=data.scenarios.indexOf(item);return {label:item.label,data:item.years.map(value),borderColor:palette[index],backgroundColor:palette[index]+"2e",fill:false,tension:.25,pointRadius:4,borderWidth:2.5};});
-      lineChart("compare-cost-all",data.years,lines(row=>row.cost_total),{unit:"$M (2025 dollars)"});
+      lineChart("compare-cost-all",data.years,lines(row=>row.cost_total),{unit:"$M/yr (2025 dollars)"});
       lineChart("compare-emissions-all",data.years,lines(row=>row.emissions_total),{unit:"Mt CO₂"});
       lineChart("compare-buildout-all",data.years,lines(row=>sumValues(row.capacity_mix)),{unit:"GW"});
     };
@@ -130,7 +136,7 @@
       document.getElementById("compare-cost-net-title").textContent = `Net System Cost: ${direction}`;
       document.getElementById("compare-emissions-net-title").textContent = `Net CO₂ Emissions: ${direction}`;
       document.getElementById("compare-buildout-net-title").textContent = `Net Cumulative Buildout: ${direction}`;
-      barChart("compare-cost-net",data.years,netDatasets(scenarioA,scenarioB,data.cost_components,"cost_breakdown",(key,index)=>palette[index%palette.length]),{stacked:true,unit:"$M (2025 dollars)"});
+      barChart("compare-cost-net",data.years,netDatasets(scenarioA,scenarioB,data.cost_components,"cost_breakdown",(key,index)=>palette[index%palette.length]),{stacked:true,unit:"$M/yr (2025 dollars)"});
       const regions = [...new Set([...scenarioA.years,...scenarioB.years].flatMap(row=>Object.keys(row.emissions_breakdown||{})))];
       barChart("compare-emissions-net",data.years,netDatasets(scenarioA,scenarioB,regions,"emissions_breakdown",(key,index)=>palette[index%palette.length]),{stacked:true,unit:"Mt CO₂"});
       barChart("compare-buildout-net",data.years,netDatasets(scenarioA,scenarioB,data.technologies,"capacity_mix",key=>data.technology_colors[key]),{stacked:true,unit:"GW"});

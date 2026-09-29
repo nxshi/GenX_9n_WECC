@@ -31,13 +31,13 @@ function addTab(workbook,name,title,headers,rows,numberColumns){const sheet=work
 
 for (const scenario of data.scenarios) {
   const workbook=Workbook.create();
-  const summary=addTab(workbook,"Summary",`${scenario.label} results`,["Model year","System cost ($M, 2025 dollars)","CO2 emissions (Mt)"],scenario.years.map(row=>[row.year,row.cost_total,row.emissions_total]),[1,2]);
+  const summary=addTab(workbook,"Summary",`${scenario.label} results`,["Model year","Annual system cost ($M, 2025 dollars, undiscounted)","CO2 emissions (Mt)"],scenario.years.map(row=>[row.year,row.cost_total,row.emissions_total]),[1,2]);
   summary.getRange("A10").values=[["Workbook contents"]]; summary.getRange("A10").format.font={name:font,size:11,bold:true,color:navy};
   summary.getRange("A11:B17").values=[["Costs","Annual system cost by component"],["Capacity","Total installed capacity by technology"],["Buildout","Cumulative additions minus retirements by technology"],["Generation","Annual generation by technology"],["Emissions","Annual CO2 emissions by region"],["Profiles","Hourly generation and demand by representative week"],["Storage sign","Positive values are discharge; negative values are charge"]];
   summary.getRange("A11:B17").format.font={name:font,size:10,color:"#1F2937"}; summary.getRange("A11:A17").format.fill=blue; summary.getRange("A11:B17").format.autofitColumns(); summary.tabColor=navy;
 
-  const costHeaders=["Model year","Reported total ($M, 2025 dollars)",...data.cost_components.map(x=>`${x} ($M, 2025 dollars)`)];
-  addTab(workbook,"Costs",`${scenario.label} system cost`,costHeaders,scenario.years.map(row=>[row.year,row.cost_total,...data.cost_components.map(key=>row.cost_breakdown[key]??0)]),costHeaders.map((_,i)=>i).slice(1));
+  const costHeaders=["Model year","Annual total ($M, 2025 dollars)",...data.cost_components.map(x=>`${x} ($M, 2025 dollars)`),"As reported by the model ($M)"];
+  addTab(workbook,"Costs",`${scenario.label} annual system cost (undiscounted)`,costHeaders,scenario.years.map(row=>[row.year,row.cost_total,...data.cost_components.map(key=>row.cost_breakdown[key]??0),row.cost_reported??""]),costHeaders.map((_,i)=>i).slice(1));
   const techHeaders=["Model year",...data.technologies.map(x=>`${x} (GW)`)];
   addTab(workbook,"Capacity",`${scenario.label} total installed capacity`,techHeaders,scenario.years.map(row=>[row.year,...data.technologies.map(key=>row.installed_capacity[key]??0)]),techHeaders.map((_,i)=>i).slice(1));
   addTab(workbook,"Buildout",`${scenario.label} cumulative buildout`,techHeaders,scenario.years.map(row=>[row.year,...data.technologies.map(key=>row.capacity_mix[key]??0)]),techHeaders.map((_,i)=>i).slice(1));
@@ -46,7 +46,7 @@ for (const scenario of data.scenarios) {
   const regions=[...new Set(scenario.years.flatMap(row=>Object.keys(row.emissions_breakdown||{})))], emissionHeaders=["Model year","Total (Mt CO2)",...regions.map(x=>`${x} (Mt CO2)`)];
   addTab(workbook,"Emissions",`${scenario.label} annual CO2 emissions`,emissionHeaders,scenario.years.map(row=>[row.year,row.emissions_total,...regions.map(key=>row.emissions_breakdown[key]??0)]),emissionHeaders.map((_,i)=>i).slice(1));
   const profileHeaders=["Model year","Representative week index","Source week","Hour","Demand (GW)",...data.technologies.map(x=>`${x} (GW)`)], profileRows=[];
-  for(const yearRow of scenario.years)for(const profile of yearRow.profiles||[]){const week=scenario.weeks.find(item=>item.index===profile.week);for(const point of profile.points||[])profileRows.push([yearRow.year,profile.week,week?.source_week??profile.week,point.hour,point.demand,...data.technologies.map(key=>point.generation[key]??0)]);}
+  for(const yearRow of scenario.years)for(const profile of yearRow.profiles||[]){const week=(yearRow.weeks||scenario.weeks).find(item=>item.index===profile.week);for(const point of profile.points||[])profileRows.push([yearRow.year,profile.week,week?.source_week??profile.week,point.hour,point.demand,...data.technologies.map(key=>point.generation[key]??0)]);}
   addTab(workbook,"Profiles",`${scenario.label} representative-week generation profiles`,profileHeaders,profileRows,profileHeaders.map((_,i)=>i).slice(4));
   workbook.recalculate();
   console.log((await workbook.inspect({kind:"table",range:"Summary!A2:C9",include:"values,formulas",tableMaxRows:10,tableMaxCols:5})).ndjson);
