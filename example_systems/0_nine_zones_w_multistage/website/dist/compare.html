@@ -32,6 +32,10 @@
 </div>
 <div class="control">
 <label for="net-scenario-b">Model Result B</label><select id="net-scenario-b"></select>
+</div></div><div class="profile-selectors"><div class="control">
+<label for="compare-profile-year">Profile year</label><select id="compare-profile-year"></select>
+</div><div class="control">
+<label for="compare-profile-week">Representative week index</label><select id="compare-profile-week"></select>
 </div></div></div></section><section class="grid comparison-grid"><article class="card"><h2>System Cost — All Model Results</h2>
 <p class="sub">Annual system cost across model years.</p>
 <div class="chart-wrap"><canvas id="compare-cost-all"></canvas></div></article><article class="card"><h2 id="compare-cost-net-title">Net System Cost</h2>
@@ -44,7 +48,15 @@
 <p class="sub">Cumulative additions minus retirements across model years.</p>
 <div class="chart-wrap"><canvas id="compare-buildout-all"></canvas></div></article><article class="card"><h2 id="compare-buildout-net-title">Net Cumulative Buildout</h2>
 <p class="sub">Model Result A minus Model Result B by technology.</p>
-<div class="chart-wrap"><canvas id="compare-buildout-net"></canvas></div></article></section><section class="method"><h2>Comparison notes</h2>
+<div class="chart-wrap"><canvas id="compare-buildout-net"></canvas></div></article><article class="card"><h2>Generation Mix — All Model Results</h2>
+<p class="sub">Annual generation across model years.</p>
+<div class="chart-wrap"><canvas id="compare-generation-all"></canvas></div></article><article class="card"><h2 id="compare-generation-net-title">Net Generation Mix</h2>
+<p class="sub">Model Result A minus Model Result B by technology.</p>
+<div class="chart-wrap"><canvas id="compare-generation-net"></canvas></div></article><article class="card"><h2 id="compare-profile-a-title">Weekly Generation Profile A</h2>
+<p class="sub" id="compare-profile-a-sub">Hourly generation by technology with demand.</p>
+<div class="chart-wrap tall"><canvas id="compare-profile-a"></canvas></div></article><article class="card"><h2 id="compare-profile-b-title">Weekly Generation Profile B</h2>
+<p class="sub" id="compare-profile-b-sub">Hourly generation by technology with demand.</p>
+<div class="chart-wrap tall"><canvas id="compare-profile-b"></canvas></div></article></section><section class="method"><h2>Comparison notes</h2>
 <ul id="method-notes"></ul></section></main><footer class="footer downloads-footer"><div class="shell download-section"><div><p class="eyebrow">Data exports</p><h2>Download Results</h2><p>Download a standardized Excel workbook for each model result.</p></div><div class="download-links"><a href="downloads/epri-results.xlsx" download>EPRI results <span>.xlsx</span></a><a href="downloads/genx-kmeans-myopic-results.xlsx" download>GenX (K-means; myopic) <span>.xlsx</span></a><a href="downloads/genx-sampled-weeks-myopic-results.xlsx" download>GenX (sampled weeks; myopic) <span>.xlsx</span></a></div></div></footer><script src="data/results-data.js"></script><script src="app.js"></script>
 </body>
 </html>
