@@ -30,7 +30,8 @@ Additionally, the user may need to specify eight more **settings-specific** inpu
 7. Vre\_and\_stor\_solar\_variability.csv: specify time-series of capacity factor/availability for each solar PV resource that exists for every co-located VRE and storage resource (in DC terms).
 8. Vre\_and\_stor\_wind\_variability.csv: specify time-series of capacity factor/availability for each wind resource that exists for every co-located VRE and storage resource (in AC terms).
 9. Hydrogen\_demand.csv: specify regional hydrogen production requirements.
-
+10. Hourly\_matching\_requirement.csv: specify hourly matching policies requiring minimum generation from qualifying resources in each model timestep. The second row specifies the hourly matching target percentage for each hourly matching constraint, and the remaining rows specify the participating demand to be matched in each timestep.
+11. Hourly\_matching\_requirement\_zonal.csv: Optional. Specify demand participating in hourly matching requirements as a fraction of total demand in each model region.
 
 !!! note "Note"
     Names of the input files are case sensitive.
@@ -68,8 +69,16 @@ This input file contains input parameters related to: 1) definition of model zon
 | z* (Network map) **OR** Start\_Zone, End\_Zone | See below |
 |Line\_Max\_Flow\_MW | Existing capacity of the inter-regional transmission line.|
 |**NetworkExpansion = 1**||
-|Line\_Max\_Reinforcement\_MW |Maximum allowable capacity addition to the existing transmission line.|
+|Line\_Max\_Reinforcement\_MW |Maximum allowable capacity addition to the existing transmission line. **Note**: on a corridor with `Discrete_Build = 1` this budget is consumed entirely by the discrete new lines (it sets how many are created); the corridor receives no continuous reinforcement.|
 |Line\_Reinforcement\_Cost\_per\_MWyr | Cost of adding new capacity to the inter-regional transmission line.|
+|**DC\_OPF = 1**||
+|Line\_Voltage\_kV | Line voltage in kV. Used with the reactance to derive the line susceptance, $\mathcal{B}_l = \mathrm{kV}^2 / X$.|
+|Line\_Reactance\_Ohms | Line reactance $X$ in Ohms.|
+|Angle\_Limit\_Rad | Maximum voltage phase-angle difference across the line, in radians.|
+|**DiscreteInvestments = 1**||
+|Discrete\_Build | {0,1} Whether this corridor hosts discrete, fixed-size new lines (each with a binary build decision) instead of continuous reinforcement. Strongly recommended for greenfield corridors under DC-OPF — see [DC-OPF and Transmission Expansion](@ref).|
+|New\_Line\_Cap\_Size\_MW | MW capacity of each discrete new line on the corridor. Required when `DiscreteInvestments = 1`.|
+|BigM | Big-M used to relax the flow–angle coupling on an unbuilt candidate line. Only used when `DC_OPF = 1` and `Bilinear_DC_OPF = 0`. Defaults to `10 × New_Line_Cap_Size_MW` if the column is absent.|
 |**Trans\_Loss\_Segments = 1**||
 |Line\_Loss\_Percentage | fractional transmission loss for each transmission line||
 |**Trans\_Loss\_Segments > 1**||
@@ -188,6 +197,10 @@ Each file contains cost and performance parameters for various generators and ot
 ---
 |**Column Name** | **Description**|
 | :------------ | :-----------|
+|**DiscreteInvestments = 1**||
+|Discrete\_Build|{0,1}, Indicates if a resource should be built in discrete quantities| 
+| |Discrete\_Build = 1: requires new capacity and retired capacity to be in increments of the unit's `Cap_Size` (default of 1 MW if not defined by user). Results in a mixed-integer program. Useful for high resolution spacial models| 
+|||Discrete\_Build = 0: new and retired capacity decisions are continuous for the given unit|
 |**ModelingToGenerateAlternatives = 1**||
 |MGA |Eligibility of the technology for Modeling To Generate Alternative (MGA) run. |
 ||1 = Technology is available for the MGA run.|
@@ -353,9 +366,7 @@ Each file contains cost and performance parameters for various generators and ot
 |Hydrogen\_Price\_Per\_Tonne| Price (or value) of hydrogen per metric tonne (USD/t)|
 |Min\_Power |[0,1], The minimum generation level for a unit as a fraction of total capacity. This value cannot be higher than the smallest time-dependent CF value for a resource in `Generators_variability.csv`.|
 |Ramp\_Up\_Percentage |[0,1], Maximum increase in power output from between two periods (typically hours), reported as a fraction of nameplate capacity.|
-|Ramp\_Dn\_Percentage |[0,1], Maximum decrease in power output from between two periods (typically hours), reported as a fraction of nameplate capacity.|
-!!! note
-    Check `Qualified_Hydrogen_Supply` column in table 5a if electrolyzers are included in the model. This column is used to indicate which resources are eligible to supply electrolyzers in the same zone (used for hourly clean supply constraint).
+|Ramp\_Dn\_Percentage |[0,1], Maximum decrease in power output from between two periods (typically hours), reported as a fraction of nameplate capacity.
 
 Each co-located VRE, electrolyzer, and storage resource can be easily configured to contain either a co-located VRE-ELEC-storage resource, standalone VRE resource (either wind, solar PV, or both), standalone eletrolyzers, or standalone storage resource.
 ##### Table 12a: Additional columns in the Vre_stor.csv file
@@ -536,7 +547,7 @@ In addition to the files described above, the `resources` folder contains a fold
 3) `Resource_maximum_capacity_requirement.csv`
 4) `Resource_capacity_reserve_margin.csv`
 5) `Resource_hydrogen_demand.csv`
-6) `Resource_hourly_matching.csv`
+6) `Resource_hourly_matching_requirement.csv`
 
 !!! note
     These files are optional and can be omitted if no policy-related settings are specified in the `genx_settings.yml` file. Also, not all the resources need to be included in these files, only those for which the policy applies.
@@ -605,14 +616,13 @@ This policy is applied when if `HydrogenMinimumProduction = 1` in the settings f
 |Resource| Resource name corresponding to a resource in one of the resource data files described above.|
 |H2\_Demand\_*| Flag to indicate which resources are considered for the Hydrogen Demand constraint.|
 
-This policy is applied when if `HourlyMatching = 1` in the settings file.
 
-##### Table 19: Hourly matching policy parameters in Resource\_hourly\_matching.csv
+##### Table 19: Hourly matching policy parameters in Resource\_hourly\_matching\_requirement.csv
 ---
 |**Column Name** | **Description**|
 | :------------ | :-----------|
 |Resource| Resource name corresponding to a resource in one of the resource data files described above.|
-|Qualified\_Supply| Flag to indicate which resources are eligible to supply the generation in the same zone.|
+|HM\_*| Flag to indicate which resources are eligible to contribute toward a given hourly matching constraint.|
 
 ##### Additional module-related columns for all resources
 In addition to the files described above, the `resources` folder can contain additional files that are used to specify attributes for specific resources and modules. Currently, the following files are supported:
@@ -652,14 +662,7 @@ In addition to the files described above, the `resources` folder can contain add
 |Min\_Retired\_Cap\_Charge_DC\_MW  |Minimum required charge capacity retirements in the current model period for storage resources with `STOR_DC_CHARGE = 2`. This field can be used to enforce lifetime retirements of existing capacity.|
 |Min\_Retired\_Cap\_Discharge_AC\_MW  |Minimum required discharge capacity retirements in the current model period for storage resources with `STOR_AC_DISCHARGE = 2`. This field can be used to enforce lifetime retirements of existing capacity.|
 |Min\_Retired\_Cap\_Charge_AC\_MW  |Minimum required charge capacity retirements in the current model period for storage resources with `STOR_AC_CHARGE = 2`. This field can be used to enforce lifetime retirements of existing capacity.|
-| WACC\_DC | The line-specific weighted average cost of capital for the inverter component. |
-| WACC\_Solar | The line-specific weighted average cost of capital for the solar PV component. |
-| WACC\_Wind | The line-specific weighted average cost of capital for the wind component. |
-| WACC\_Elec | The line-specific weighted average cost of capital for the electrolyzer component. |
-| WACC\_Discharge\_DC | The line-specific weighted average cost of capital for the discharging DC storage component with `STOR_DC_DISCHARGE = 2`. |
-| WACC\_Charge\_DC | The line-specific weighted average cost of capital for the charging DC storage component with `STOR_DC_CHARGE = 2`. |
-| WACC\_Discharge\_AC | The line-specific weighted average cost of capital for the discharging AC storage component with `STOR_AC_DISCHARGE = 2`. |
-| WACC\_Charge\_AC | The line-specific weighted average cost of capital for the charging AC storage component with `STOR_AC_CHARGE = 2`. |
+| WACC\_DC, WACC\_Solar, WACC\_Wind, WACC\_Elec, WACC\_Discharge\_DC, WACC\_Charge\_DC, WACC\_Discharge\_AC, WACC\_Charge\_AC | *Optional, not used in discounting.* Component-specific costs of capital, accepted for backwards compatibility. Multi-stage investment annuities are discounted at the general discount rate in `multi_stage_settings.yml`; see the multi-stage input documentation. |
 
 #### 1.5 Generator\_variability.csv
 
