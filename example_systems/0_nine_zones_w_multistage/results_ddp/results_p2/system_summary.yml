@@ -1,0 +1,9 @@
+ARCH: x86_64
+CPU_THREADS: 192
+JULIA_STDLIB: "/scratch/gpfs/LICENSED/x86_64/julia/1.10.5/share/julia/stdlib/v1.10"
+JULIA_VERSION: 1.10.5
+KERNEL: Linux
+GENX_VERSION: 0.4.6
+MACHINE: "x86_64-linux-gnu"
+JIT: "ORCJIT"
+CPU_NAME: "znver3"

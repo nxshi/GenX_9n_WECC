@@ -264,7 +264,33 @@ def genx_fixed_om(capacity: pd.DataFrame, rates: pd.DataFrame) -> float:
     return total
 
 
-def genx_scenario(case_root: Path, directory: str, scenario_id: str, label: str, tdr_folder: str):
+GENX_INVESTMENT_TERMS = {
+    "inv_cost_per_mwyr": "NewCap",
+    "inv_cost_per_mwhyr": "NewEnergyCap",
+    "inv_cost_charge_per_mwyr": "NewChargeCap",
+}
+
+
+def genx_new_build_investment(capacity: pd.DataFrame, resource_root: Path) -> float:
+    """Annualized investment payments ($/yr) on capacity built in a stage."""
+    frames = []
+    for path in sorted(resource_root.glob("*.csv")):
+        frame = pd.read_csv(path)
+        frame.columns = [str(column).strip().lower() for column in frame.columns]
+        columns = [column for column in GENX_INVESTMENT_TERMS if column in frame.columns]
+        if "resource" in frame.columns and columns:
+            frames.append(frame[["resource", *columns]])
+    rates = pd.concat(frames, ignore_index=True).set_index("resource")
+    resources = capacity[capacity["Resource"].isin(rates.index)].set_index("Resource")
+    total = 0.0
+    for rate_column, capacity_column in GENX_INVESTMENT_TERMS.items():
+        if rate_column in rates.columns and capacity_column in resources.columns:
+            total += float((rates.loc[resources.index, rate_column].fillna(0) * resources[capacity_column].fillna(0)).sum())
+    return total
+
+
+def genx_scenario(case_root: Path, directory: str, scenario_id: str, label: str, tdr_folder: str,
+                  perfect_foresight: bool = False):
     scenario_root = case_root / directory
     # Time-domain reduction runs separately for each stage, so representative
     # weeks and weights can differ by stage (they do for K-means).
@@ -278,8 +304,14 @@ def genx_scenario(case_root: Path, directory: str, scenario_id: str, label: str,
     cumulative_investment = 0.0
     for stage, year in enumerate(YEARS, start=1):
         stage_root = scenario_root / f"results_p{stage}"
-        costs = pd.read_csv(stage_root / "costs.csv")
-        costs_by_name = dict(zip(costs["Costs"], costs["Total"]))
+        if perfect_foresight:
+            # DDP costs.csv is discounted and covers the whole stage. Use the
+            # undiscounted file and divide by the stage length for annual costs.
+            costs = pd.read_csv(stage_root / "costs_undiscounted.csv")
+            costs_by_name = {name: value / STAGE_LENGTH_YEARS for name, value in zip(costs["Costs"], costs["Total"])}
+        else:
+            costs = pd.read_csv(stage_root / "costs.csv")
+            costs_by_name = dict(zip(costs["Costs"], costs["Total"]))
         capacity = pd.read_csv(stage_root / "capacity.csv")
         for row in capacity.itertuples(index=False):
             technology = tech_group(row.Resource)
@@ -298,12 +330,20 @@ def genx_scenario(case_root: Path, directory: str, scenario_id: str, label: str,
         # cFix using the run's own totals, then carry investment forward so each
         # year shows the payments on everything built so far (as EPRI reports).
         fixed_om = genx_fixed_om(capacity, genx_fixed_om_rates(case_root / "inputs" / f"inputs_p{stage}" / "resources"))
-        stage_investment = costs_by_name.get("cFix", 0) - fixed_om
+        if perfect_foresight:
+            # The DDP cash-flow reporting times investment payments differently from
+            # the myopic reports, so take each stage's new-build annuities straight
+            # from the stage inputs and carry them forward as for the myopic runs.
+            stage_investment = genx_new_build_investment(capacity, case_root / "inputs" / f"inputs_p{stage}" / "resources")
+            reported_investment = costs_by_name.get("cFix", 0) - fixed_om
+        else:
+            stage_investment = costs_by_name.get("cFix", 0) - fixed_om
+            reported_investment = stage_investment
         if stage_investment < -1e3:
             raise ValueError(f"{stage_root}: fixed O&M {fixed_om:,.0f} exceeds cFix; input costs do not match this run")
         cumulative_investment += max(stage_investment, 0.0)
         variable = sum(costs_by_name.get(name, 0) for name in ("cVar", "cFuel", "cStart"))
-        cost_total = costs_by_name.get("cTotal", 0) - stage_investment + cumulative_investment
+        cost_total = costs_by_name.get("cTotal", 0) - reported_investment + cumulative_investment
         breakdown = {
             "Investment": cumulative_investment,
             "Fixed O&M": fixed_om,
@@ -353,6 +393,10 @@ def genx_scenario(case_root: Path, directory: str, scenario_id: str, label: str,
         "capacity_note": "Cumulative net buildout (GW): additions minus retirements, grouped by technology.",
         "emissions_note": "Annual CO₂ emissions (million tonnes) from GenX AnnualSum, aggregated to CAISO, Central, North, and South.",
         "cost_note": (
+            "Annual costs from costs_undiscounted.csv divided by the five-year stage length. "
+            "Investment is the running total of annualized payments on capacity built to date, "
+            "computed from each stage's new builds and input costs."
+            if perfect_foresight else
             "Annual costs from costs.csv. Investment is the running total of annualized "
             "payments on all capacity built to date; costs.csv (cTotal) only includes "
             "capacity built in that stage."
@@ -531,6 +575,8 @@ def main():
         epri_scenario(case_root, source_root, discount_rate, dollar_year),
         genx_scenario(case_root, "results_kmeans_myopic", "kmeans_myopic", "GenX (K-means; myopic)", "TDR_results_kmeans"),
         genx_scenario(case_root, "results_sampled_myopic", "sampled_myopic", "GenX (sampled weeks; myopic)", "TDR_results"),
+        genx_scenario(case_root, "results_ddp", "sampled_ddp", "GenX (sampled weeks; DDP)", "TDR_results",
+                      perfect_foresight=True),
     ]
     cost_components = [
         key for key in COST_ORDER
@@ -549,7 +595,7 @@ def main():
             "cost": (
                 f"Annual, undiscounted costs in {dollar_year} dollars for every model. EPRI's workbook "
                 "reports each year as a five-year stage total discounted to 2025; those values are "
-                "divided by that factor. GenX myopic runs only charge investment in the year capacity "
+                "divided by that factor. GenX runs report investment only in the stage capacity "
                 "is built; Investment here carries those payments forward so every year includes "
                 "all capacity built to date, as EPRI's does."
             ),
@@ -585,6 +631,11 @@ def main():
             "period weight. EPRI generation is hourly GW and is weighted to annual TWh.",
             "The test system covers California and neighbouring WECC regions with 1.3 GW of coal, so "
             "annual emissions (~60 Mt in 2025) are well below WECC-wide totals.",
+            "The sampled-week DDP (perfect foresight) result uses the same 13 sampled weeks as the "
+            "sampled-week myopic run, with a 7% discount rate, a 0.1% DDP convergence tolerance, and "
+            "Gurobi Optimal_Tol 1e-6. Its costs are the undiscounted stage cash flows in "
+            "costs_undiscounted.csv divided by the five-year stage length; its investment is computed "
+            "from each stage's new builds and input costs, so it is comparable with the other models.",
             "The K-means GenX result predates the learning-rate and storage-efficiency input fixes "
             "and is not yet directly comparable.",
         ],

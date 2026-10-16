@@ -16,6 +16,7 @@ FILE_NAMES = {
     "epri": "epri-results.xlsx",
     "kmeans_myopic": "genx-kmeans-myopic-results.xlsx",
     "sampled_myopic": "genx-sampled-weeks-myopic-results.xlsx",
+    "sampled_ddp": "genx-sampled-weeks-ddp-results.xlsx",
 }
 
 
