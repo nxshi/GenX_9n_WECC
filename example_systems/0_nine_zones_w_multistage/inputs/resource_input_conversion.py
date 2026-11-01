@@ -34,6 +34,8 @@ from collections import defaultdict
 from pathlib import Path
 
 from system_input_conversion import (
+    CAP_RES_AREAS,
+    NODE_AREA,
     STAGES,
     ZONE_MAP,
     FUEL_MAP,
@@ -42,16 +44,28 @@ from system_input_conversion import (
     require,
 )
 
-NODE_AREA = {
-    "Central": "Central", "IID": "CAISO", "LADWP": "CAISO", "NCNC": "CAISO",
-    "North": "North", "PGE": "CAISO", "SCE": "CAISO", "SDGE": "CAISO", "South": "South",
-}
 REVERSE_FUEL_MAP = {node_tech: fuel for fuel, node_tech in FUEL_MAP.items()}
 
 THERMAL_TECHS = {"NGCC", "Peaker", "NG-CCS", "Coal", "Nuclear", "Biomass", "Geothermal"}
 VRE_TECHS = {"Solar", "Wind"}
 STORAGE_TECHS = {"Storage"}
 HYDRO_TECHS = {"Hydro"}
+
+# PLACEHOLDER Derating_Factor values by technology, pending project-lead review.
+# GenX's capacity reserve margin is an hourly constraint: VRE already counts at that
+# hour's availability, and storage and hydro at that hour's output, so the derating
+# covers only what is left (e.g. forced outages). EPRI's CapacityCredit is meant for an
+# annual constraint on installed capacity and already includes availability at peak, so
+# it is deliberately not used here. Values follow the GenX example systems, e.g.
+# example_systems/4_three_zones_w_policies_slack. Geothermal has no example and uses the
+# thermal value. A resource gets its value in its own area's Derating_Factor_N column and
+# 0 in the others, because GenX's reserve constraints do not filter resources by zone.
+DERATING_FACTORS = {
+    "NGCC": 0.93, "Peaker": 0.93, "NG-CCS": 0.93, "Coal": 0.93,
+    "Nuclear": 0.93, "Biomass": 0.93, "Geothermal": 0.93,
+    "Solar": 0.80, "Wind": 0.80, "Hydro": 0.80,
+    "Storage": 0.95,
+}
 
 # Data documentation section 4.3: 7% discount rate, 30-year financial life,
 # uniform across every resource (not technology-specific).
@@ -90,8 +104,9 @@ MULTISTAGE_FIELDS = [
     "Resource", "WACC", "Capital_Recovery_Period", "Lifetime",
     "Min_Retired_Cap_MW", "Min_Retired_Energy_Cap_MW", "Min_Retired_Charge_Cap_MW",
 ]
-CAP_CREDIT_FIELDS = ["Resource", "Derating_Factor_1"]
-CAP_RES_FIELDS = ["Region_description", "Network_zones", "CapRes_1"]
+AREA_NUMBERS = range(1, len(CAP_RES_AREAS) + 1)
+DERATING_FIELDS = ["Resource", *(f"Derating_Factor_{number}" for number in AREA_NUMBERS)]
+CAP_RES_FIELDS = ["Region_description", "Network_zones", *(f"CapRes_{number}" for number in AREA_NUMBERS)]
 
 
 def zone_int(node: str) -> int:
@@ -331,7 +346,7 @@ def main() -> int:
 
     required_generation_fields = (
         "Unit", "Node", "Technology", "MaximumPower", "MaximumStorage", "Efficiency",
-        "OMVariableCost", "OMFixedCost", "LinearTerm", "CapacityCredit",
+        "OMVariableCost", "OMFixedCost", "LinearTerm",
         "FixedInvestmentCost", "FixedChargeRate",
     )
     for field in required_generation_fields:
@@ -343,6 +358,7 @@ def main() -> int:
     all_techs = {row["Technology"] for row in generation_rows}
     known_techs = THERMAL_TECHS | VRE_TECHS | STORAGE_TECHS | HYDRO_TECHS
     require(all_techs <= known_techs, f"Generation.csv has unmapped technologies: {all_techs - known_techs}")
+    require(known_techs <= set(DERATING_FACTORS), f"No derating factor for: {known_techs - set(DERATING_FACTORS)}")
     require(all(row["Node"] in ZONE_MAP for row in generation_rows), "Generation.csv has a Node outside ZONE_MAP")
 
     schedule = compute_retirement_schedule(retirement_rows)
@@ -367,7 +383,7 @@ def main() -> int:
         require((stage_dir / "system").is_dir(), f"Missing directory: {stage_dir / 'system'}")
 
         thermal_rows, vre_rows, storage_rows, hydro_rows = [], [], [], []
-        multistage_rows, credit_rows = [], []
+        multistage_rows, derating_rows = [], []
 
         for row in generation_rows:
             unit, node, tech = row["Unit"], row["Node"], row["Technology"]
@@ -392,7 +408,13 @@ def main() -> int:
                 min_retired = min_retired_capacity(schedule, unit, year, previous_year, nameplate_mw[unit])
                 multistage_rows.append(build_multistage_row(unit, min_retired))
 
-            credit_rows.append({"Resource": unit, "Derating_Factor_1": row["CapacityCredit"]})
+            derating_rows.append({
+                "Resource": unit,
+                **{
+                    f"Derating_Factor_{number}": DERATING_FACTORS[tech] if area == NODE_AREA[row["Node"]] else 0
+                    for number, area in enumerate(CAP_RES_AREAS, start=1)
+                },
+            })
 
         write_csv_atomic(resources_dir / "Thermal.csv", THERMAL_FIELDS, thermal_rows)
         write_csv_atomic(resources_dir / "Vre.csv", VRE_FIELDS, vre_rows)
@@ -400,13 +422,16 @@ def main() -> int:
         write_csv_atomic(resources_dir / "Hydro.csv", HYDRO_FIELDS, hydro_rows)
         write_csv_atomic(resources_dir / "Resource_multistage_data.csv", MULTISTAGE_FIELDS, multistage_rows)
         write_csv_atomic(policy_assignments_dir / "Resource_capacity_reserve_margin.csv",
-                          CAP_CREDIT_FIELDS, credit_rows)
+                          DERATING_FIELDS, derating_rows)
 
         cap_res_rows = [
             {
                 "Region_description": node,
                 "Network_zones": ZONE_MAP[node],
-                "CapRes_1": fmt(area_reserve[(year, NODE_AREA[node])] - 1),
+                **{
+                    f"CapRes_{number}": fmt(area_reserve[(year, area)] - 1) if area == NODE_AREA[node] else 0
+                    for number, area in enumerate(CAP_RES_AREAS, start=1)
+                },
             }
             for node in ZONE_MAP
         ]

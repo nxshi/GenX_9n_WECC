@@ -36,6 +36,14 @@ FUEL_MAP = {
 }
 EMISSION_OVERRIDES = {"ng_ccs_central": "0.00265"}
 SYSTEM_FILES = ("Demand_data.csv", "Generators_variability.csv", "Fuels_data.csv", "Network.csv")
+# Capacity reserve margin regions: EPRI's four planning areas, one GenX constraint each.
+# An area's position in CAP_RES_AREAS is its N in CapRes_N, Derating_Factor_N,
+# DerateCapRes_N, and CapRes_Excl_N.
+NODE_AREA = {
+    "Central": "Central", "IID": "CAISO", "LADWP": "CAISO", "NCNC": "CAISO",
+    "North": "North", "PGE": "CAISO", "SCE": "CAISO", "SDGE": "CAISO", "South": "South",
+}
+CAP_RES_AREAS = ("CAISO", "Central", "North", "South")
 
 
 def read_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
@@ -55,6 +63,35 @@ def write_csv_atomic(path: Path, fields: list[str], rows: list[dict[str, object]
     except Exception:
         Path(temporary_name).unlink(missing_ok=True)
         raise
+
+
+def network_header_for_areas(header: list[str]) -> list[str]:
+    """Replace a Network.csv header's reserve columns with one pair per area, in place."""
+    prefixes = ("DerateCapRes_", "CapRes_Excl_")
+    start = min(index for index, name in enumerate(header) if name.startswith(prefixes))
+    kept = [name for name in header if not name.startswith(prefixes)]
+    reserve_fields = [
+        name for number in range(1, len(CAP_RES_AREAS) + 1)
+        for name in (f"DerateCapRes_{number}", f"CapRes_Excl_{number}")
+    ]
+    return kept[:start] + reserve_fields + kept[start:]
+
+
+def line_reserve_fields(source_row: dict[str, str]) -> dict[str, str]:
+    """Reserve columns for one line, whose flow is positive from NodeFrom to NodeTo.
+
+    GenX subtracts CapRes_Excl_N * DerateCapRes_N * flow from region N's available
+    capacity, so 1 marks an export from the area, -1 an import, and 0 a line that does
+    not cross the area's boundary.
+    """
+    start_area, end_area = NODE_AREA[source_row["NodeFrom"]], NODE_AREA[source_row["NodeTo"]]
+    fields = {}
+    for number, area in enumerate(CAP_RES_AREAS, start=1):
+        fields[f"DerateCapRes_{number}"] = source_row["SecurityFactor"]
+        crosses = start_area != end_area
+        sign = 1 if crosses and start_area == area else -1 if crosses and end_area == area else 0
+        fields[f"CapRes_Excl_{number}"] = str(sign)
+    return fields
 
 
 def require(condition: bool, message: str) -> None:
@@ -135,7 +172,7 @@ def verify_outputs(inputs_root: Path, demand_by_year: dict, availability_by_year
                 "transmission_path_name": f'{source_row["NodeFrom"]}_to_{source_row["NodeTo"]}',
                 "distance_mile": source_row["Length"],
                 "Line_Loss_Percentage": source_row["LossFactor"],
-                "DerateCapRes_1": source_row["SecurityFactor"],
+                **line_reserve_fields(source_row),
                 "Line_Max_Flow_Possible_MW": source_row["TTC"],
             }
             for field, value in expected.items():
@@ -161,7 +198,7 @@ def main() -> int:
     require(source.is_dir(), f"Source directory does not exist: {source}")
     require(template_system.is_dir(), f"Template system directory does not exist: {template_system}")
 
-    source_tables = {name: read_csv(source / name) for name in ("Demand.csv", "AvailabilityFactor.csv", "Generation.csv", "Network.csv", "Parameter.csv")}
+    source_tables = {name: read_csv(source / name) for name in ("Demand.csv", "AvailabilityFactor.csv", "Generation.csv", "Network.csv", "Parameter.csv", "NodeLocation.csv")}
     templates = {name: read_csv(template_system / name) for name in SYSTEM_FILES}
     for stage, _ in STAGES:
         directory = inputs_root / f"inputs_p{stage}" / "system"
@@ -177,6 +214,9 @@ def main() -> int:
     parameter_fields, parameter_rows = source_tables["Parameter.csv"]
     require("ENSCost" in parameter_fields and len(parameter_rows) == 1, "Parameter.csv must contain exactly one ENSCost value")
     require(len(network_rows) == 17, "Network.csv must contain exactly 17 lines")
+    require({row["Node"]: row["Area"] for row in source_tables["NodeLocation.csv"][1]} == NODE_AREA,
+            "NodeLocation.csv areas do not match NODE_AREA")
+    require(set(NODE_AREA.values()) == set(CAP_RES_AREAS), "CAP_RES_AREAS does not match NODE_AREA")
     for required in ("Year", *ZONE_MAP):
         require(required in demand_fields, f"Demand.csv is missing {required}")
     for required in ("Year", "LoadLevel"):
@@ -199,6 +239,7 @@ def main() -> int:
     variability_header, _ = templates["Generators_variability.csv"]
     fuel_header, fuel_template = templates["Fuels_data.csv"]
     network_header, network_template = templates["Network.csv"]
+    network_header = network_header_for_areas(network_header)
     require(all(f"Demand_MW_{zone}" in demand_header for zone in ZONE_MAP.values()), "Demand template does not match the nine-zone map")
     require(all(name in availability_fields for name in variability_header if name != "Time_Index"), "Availability source is missing a GenX resource column")
     require(len(fuel_template) >= 2, "Fuel template must include emission and price rows")
@@ -275,7 +316,7 @@ def main() -> int:
                 "transmission_path_name": f'{source_row["NodeFrom"]}_to_{source_row["NodeTo"]}',
                 "distance_mile": source_row["Length"],
                 "Line_Loss_Percentage": source_row["LossFactor"],
-                "DerateCapRes_1": source_row["SecurityFactor"],
+                **line_reserve_fields(source_row),
                 "Line_Max_Flow_Possible_MW": source_row["TTC"],
             })
             network_out.append(row)

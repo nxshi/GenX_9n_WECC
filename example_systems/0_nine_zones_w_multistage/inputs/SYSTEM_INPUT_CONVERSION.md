@@ -39,8 +39,12 @@ five stages:
   `0.00265 tonnes/MMBtu` to match the other five NG-CCS candidates.
 - Network: for all 17 lines the retained defaults are
   `Line_Max_Reinforcement_MW=-1`,
-  `Line_Reinforcement_Cost_per_MWyr=0`, `CapRes_Excl_1=0`, `WACC=0.07`, and
+  `Line_Reinforcement_Cost_per_MWyr=0`, `WACC=0.07`, and
   `Capital_Recovery_Period=30`.
+- Network reserve columns: `DerateCapRes_N` and `CapRes_Excl_N` are written for
+  EPRI's four planning areas (1 CAISO, 2 Central, 3 North, 4 South).
+  `CapRes_Excl_N` is 1 for a line exporting from the area, -1 for a line
+  importing to it, and 0 for a line that does not cross its boundary.
 
 All other populated values in these four tables come directly from the
 provided inputs. The script uses the p1 system files as the default
