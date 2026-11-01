@@ -289,9 +289,25 @@ def genx_new_build_investment(capacity: pd.DataFrame, resource_root: Path) -> fl
     return total
 
 
-def genx_scenario(case_root: Path, directory: str, scenario_id: str, label: str, tdr_folder: str,
-                  perfect_foresight: bool = False):
+def genx_has_undiscounted_costs(scenario_root: Path) -> bool:
+    """True when a run uses the cost files written since GenX #922.
+
+    Those runs, myopic or DDP, have costs_undiscounted.csv, and their costs.csv
+    is a present value that includes annuities beyond the stage. Earlier runs
+    have only costs.csv, holding one year of costs for the stage.
+    """
+    present = [
+        (scenario_root / f"results_p{stage}" / "costs_undiscounted.csv").is_file()
+        for stage in range(1, len(YEARS) + 1)
+    ]
+    if any(present) != all(present):
+        raise ValueError(f"{scenario_root}: costs_undiscounted.csv exists for only some stages: {present}")
+    return all(present)
+
+
+def genx_scenario(case_root: Path, directory: str, scenario_id: str, label: str, tdr_folder: str):
     scenario_root = case_root / directory
+    undiscounted_costs = genx_has_undiscounted_costs(scenario_root)
     # Time-domain reduction runs separately for each stage, so representative
     # weeks and weights can differ by stage (they do for K-means).
     stage_weeks = [
@@ -304,9 +320,9 @@ def genx_scenario(case_root: Path, directory: str, scenario_id: str, label: str,
     cumulative_investment = 0.0
     for stage, year in enumerate(YEARS, start=1):
         stage_root = scenario_root / f"results_p{stage}"
-        if perfect_foresight:
-            # DDP costs.csv is discounted and covers the whole stage. Use the
-            # undiscounted file and divide by the stage length for annual costs.
+        if undiscounted_costs:
+            # costs.csv is a present value here. Use the undiscounted file and
+            # divide by the stage length for annual costs.
             costs = pd.read_csv(stage_root / "costs_undiscounted.csv")
             costs_by_name = {name: value / STAGE_LENGTH_YEARS for name, value in zip(costs["Costs"], costs["Total"])}
         else:
@@ -330,10 +346,10 @@ def genx_scenario(case_root: Path, directory: str, scenario_id: str, label: str,
         # cFix using the run's own totals, then carry investment forward so each
         # year shows the payments on everything built so far (as EPRI reports).
         fixed_om = genx_fixed_om(capacity, genx_fixed_om_rates(case_root / "inputs" / f"inputs_p{stage}" / "resources"))
-        if perfect_foresight:
-            # The DDP cash-flow reporting times investment payments differently from
-            # the myopic reports, so take each stage's new-build annuities straight
-            # from the stage inputs and carry them forward as for the myopic runs.
+        if undiscounted_costs:
+            # These files book all of a build's payments inside the horizon in its
+            # build stage, for DDP and myopic alike, so take each stage's new-build
+            # annuities straight from the stage inputs and carry them forward.
             stage_investment = genx_new_build_investment(capacity, case_root / "inputs" / f"inputs_p{stage}" / "resources")
             reported_investment = costs_by_name.get("cFix", 0) - fixed_om
         else:
@@ -396,7 +412,7 @@ def genx_scenario(case_root: Path, directory: str, scenario_id: str, label: str,
             "Annual costs from costs_undiscounted.csv divided by the five-year stage length. "
             "Investment is the running total of annualized payments on capacity built to date, "
             "computed from each stage's new builds and input costs."
-            if perfect_foresight else
+            if undiscounted_costs else
             "Annual costs from costs.csv. Investment is the running total of annualized "
             "payments on all capacity built to date; costs.csv (cTotal) only includes "
             "capacity built in that stage."
@@ -575,8 +591,7 @@ def main():
         epri_scenario(case_root, source_root, discount_rate, dollar_year),
         genx_scenario(case_root, "results_kmeans_myopic", "kmeans_myopic", "GenX (K-means; myopic)", "TDR_results_kmeans"),
         genx_scenario(case_root, "results_sampled_myopic", "sampled_myopic", "GenX (sampled weeks; myopic)", "TDR_results"),
-        genx_scenario(case_root, "results_ddp", "sampled_ddp", "GenX (sampled weeks; DDP)", "TDR_results",
-                      perfect_foresight=True),
+        genx_scenario(case_root, "results_ddp", "sampled_ddp", "GenX (sampled weeks; DDP)", "TDR_results"),
     ]
     cost_components = [
         key for key in COST_ORDER
