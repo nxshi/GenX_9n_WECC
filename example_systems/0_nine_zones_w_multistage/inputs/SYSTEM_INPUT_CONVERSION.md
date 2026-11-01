@@ -43,8 +43,12 @@ five stages:
   `Capital_Recovery_Period=30`.
 - Network reserve columns: `DerateCapRes_N` and `CapRes_Excl_N` are written for
   EPRI's four planning areas (1 CAISO, 2 Central, 3 North, 4 South).
-  `CapRes_Excl_N` is 1 for a line exporting from the area, -1 for a line
-  importing to it, and 0 for a line that does not cross its boundary.
+  `CapRes_Excl_N` is currently 0 on every line, because EPRI's reserve rule
+  counts each area's installed capacity and does not mention transmission, so
+  line flows do not count toward any area's reserves. Flows still remain in the
+  hourly power balance. Setting `COUNT_LINE_FLOWS_IN_RESERVES = True` in
+  `system_input_conversion.py` makes it 1 for a line exporting from the area, -1
+  for a line importing to it, and 0 for a line that does not cross its boundary.
 
 All other populated values in these four tables come directly from the
 provided inputs. The script uses the p1 system files as the default

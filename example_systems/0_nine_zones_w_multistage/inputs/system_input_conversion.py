@@ -44,6 +44,11 @@ NODE_AREA = {
     "North": "North", "PGE": "CAISO", "SCE": "CAISO", "SDGE": "CAISO", "South": "South",
 }
 CAP_RES_AREAS = ("CAISO", "Central", "North", "South")
+# EPRI's reserve rule counts each area's installed capacity and does not mention
+# transmission, so line flows stay out of the reserve constraints. Set True for the
+# sensitivity in which areas count imports and lose credit for exports. Dispatch is
+# unaffected either way: flows always remain in GenX's hourly power balance.
+COUNT_LINE_FLOWS_IN_RESERVES = False
 
 
 def read_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
@@ -82,13 +87,14 @@ def line_reserve_fields(source_row: dict[str, str]) -> dict[str, str]:
 
     GenX subtracts CapRes_Excl_N * DerateCapRes_N * flow from region N's available
     capacity, so 1 marks an export from the area, -1 an import, and 0 a line that does
-    not cross the area's boundary.
+    not count, either because it does not cross the area's boundary or because
+    COUNT_LINE_FLOWS_IN_RESERVES is False.
     """
     start_area, end_area = NODE_AREA[source_row["NodeFrom"]], NODE_AREA[source_row["NodeTo"]]
     fields = {}
     for number, area in enumerate(CAP_RES_AREAS, start=1):
         fields[f"DerateCapRes_{number}"] = source_row["SecurityFactor"]
-        crosses = start_area != end_area
+        crosses = COUNT_LINE_FLOWS_IN_RESERVES and start_area != end_area
         sign = 1 if crosses and start_area == area else -1 if crosses and end_area == area else 0
         fields[f"CapRes_Excl_{number}"] = str(sign)
     return fields
