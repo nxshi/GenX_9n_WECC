@@ -8,6 +8,9 @@ on:
       - "example_systems/0_nine_zones_w_multistage/results_kmeans_myopic/**"
       - "example_systems/0_nine_zones_w_multistage/results_sampled_myopic/**"
       - "example_systems/0_nine_zones_w_multistage/results_ddp/**"
+      - "example_systems/0_nine_zones_w_multistage/results_ddp_area_reserves/**"
+      - "example_systems/0_nine_zones_w_multistage/results_ddp_hydro_ror/**"
+      - "example_systems/0_nine_zones_w_multistage/results_ddp_imports_hydro_ror/**"
       - "example_systems/0_nine_zones_w_multistage/inputs/**"
       - "example_systems/0_nine_zones_w_multistage/website/**"
       - ".github/workflows/results-website.yml"
@@ -50,6 +53,9 @@ jobs:
           test -s dist/downloads/genx-kmeans-myopic-results.xlsx
           test -s dist/downloads/genx-sampled-weeks-myopic-results.xlsx
           test -s dist/downloads/genx-sampled-weeks-ddp-results.xlsx
+          test -s dist/downloads/genx-sampled-weeks-ddp-area-reserves-results.xlsx
+          test -s dist/downloads/genx-sampled-weeks-ddp-hydro-ror-results.xlsx
+          test -s dist/downloads/genx-sampled-weeks-ddp-imports-hydro-ror-results.xlsx
       - name: Commit refreshed generated files
         run: |
           git add example_systems/0_nine_zones_w_multistage/website/dist/data/results-data.js

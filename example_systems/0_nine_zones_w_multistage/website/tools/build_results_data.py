@@ -592,6 +592,12 @@ def main():
         genx_scenario(case_root, "results_kmeans_myopic", "kmeans_myopic", "GenX (K-means; myopic)", "TDR_results_kmeans"),
         genx_scenario(case_root, "results_sampled_myopic", "sampled_myopic", "GenX (sampled weeks; myopic)", "TDR_results"),
         genx_scenario(case_root, "results_ddp", "sampled_ddp", "GenX (sampled weeks; DDP)", "TDR_results"),
+        genx_scenario(case_root, "results_ddp_area_reserves", "sampled_ddp_area_reserves",
+                      "GenX (sampled weeks; DDP; area reserves)", "TDR_results"),
+        genx_scenario(case_root, "results_ddp_hydro_ror", "sampled_ddp_hydro_ror",
+                      "GenX (sampled weeks; DDP; area reserves; run-of-river hydro)", "TDR_results"),
+        genx_scenario(case_root, "results_ddp_imports_hydro_ror", "sampled_ddp_imports_hydro_ror",
+                      "GenX (sampled weeks; DDP; area reserves; imports; run-of-river hydro)", "TDR_results"),
     ]
     cost_components = [
         key for key in COST_ORDER
@@ -651,6 +657,15 @@ def main():
             "Gurobi Optimal_Tol 1e-6. Its costs are the undiscounted stage cash flows in "
             "costs_undiscounted.csv divided by the five-year stage length; its investment is computed "
             "from each stage's new builds and input costs, so it is comparable with the other models.",
+            "The area-reserves DDP result applies an hourly 15% reserve margin separately to EPRI's "
+            "four planning areas, using placeholder derating factors pending project-lead review "
+            "(0.93 thermal, 0.80 solar, wind, and hydro, 0.95 storage). Line flows do not count toward "
+            "any area's reserves, but they still serve demand. The other GenX results use one system-"
+            "wide reserve constraint with EPRI's capacity credits as derating factors.",
+            "The run-of-river hydro results model hydro as a curtailable resource, so hourly output "
+            "cannot exceed availability times capacity. In the other GenX results, hydro can shift "
+            "water within each modeled week. The result labelled imports also counts line flows "
+            "toward each area's reserves.",
             "The K-means GenX result predates the learning-rate and storage-efficiency input fixes "
             "and is not yet directly comparable.",
         ],

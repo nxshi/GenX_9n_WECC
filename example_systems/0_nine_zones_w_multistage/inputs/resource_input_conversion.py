@@ -312,6 +312,36 @@ def build_hydro_row(row: dict[str, str], zone: int) -> dict[str, object]:
     }
 
 
+def build_hydro_vre_row(row: dict[str, str], zone: int) -> dict[str, object]:
+    """Hydro as a curtailable Vre.csv resource, for the --hydro-as-vre sensitivity.
+
+    Hydro.csv with Hydro_Energy_to_Power_Ratio=0 has no reservoir size limit, so GenX
+    can shift water within each modeled week. In Vre.csv output cannot exceed that
+    hour's availability and excess water is curtailed, which is the run-of-river
+    behavior GenX documents for hydro that can spill.
+    """
+    unit, node = row["Unit"], row["Node"]
+    return {
+        "Resource": unit,
+        "Zone": zone,
+        "Num_VRE_Bins": 1,
+        "New_Build": 0,
+        "Can_Retire": 1,
+        "Existing_Cap_MW": row["MaximumPower"],
+        "Max_Cap_MW": "-1",
+        "Min_Cap_MW": "-1",
+        "Inv_Cost_per_MWyr": 0,
+        "Fixed_OM_Cost_per_MWyr": fmt(float(row["OMFixedCost"]) * 1000),
+        "Var_OM_Cost_per_MWh": row["OMVariableCost"] or "0",
+        "Reg_Max": 0,
+        "Rsv_Max": 0,
+        "Reg_Cost": 0,
+        "Rsv_Cost": 0,
+        "region": node,
+        "cluster": 1,
+    }
+
+
 def build_multistage_row(resource: str, min_retired_cap: float,
                           min_retired_energy: float = 0.0, min_retired_charge: float = 0.0) -> dict[str, object]:
     return {
@@ -334,6 +364,8 @@ def main() -> int:
                          help="Project-manager data directory; defaults to WECC-9n test system/data below inputs-root")
     parser.add_argument("--dry-run", action="store_true",
                          help="Validate the delivery without writing any files")
+    parser.add_argument("--hydro-as-vre", action="store_true",
+                         help="Write hydro to Vre.csv as curtailable run-of-river and remove Hydro.csv")
     args = parser.parse_args()
     inputs_root = args.inputs_root.resolve()
     source = (args.source or inputs_root / "WECC-9n test system" / "data").resolve()
@@ -404,7 +436,10 @@ def main() -> int:
                     schedule, unit, year, previous_year, nameplate_mwh.get(unit, nameplate_mw[unit] * 4))
                 multistage_rows.append(build_multistage_row(unit, min_retired_power, min_retired_energy))
             elif tech in HYDRO_TECHS:
-                hydro_rows.append(build_hydro_row(row, zone))
+                if args.hydro_as_vre:
+                    vre_rows.append(build_hydro_vre_row(row, zone))
+                else:
+                    hydro_rows.append(build_hydro_row(row, zone))
                 min_retired = min_retired_capacity(schedule, unit, year, previous_year, nameplate_mw[unit])
                 multistage_rows.append(build_multistage_row(unit, min_retired))
 
@@ -419,7 +454,10 @@ def main() -> int:
         write_csv_atomic(resources_dir / "Thermal.csv", THERMAL_FIELDS, thermal_rows)
         write_csv_atomic(resources_dir / "Vre.csv", VRE_FIELDS, vre_rows)
         write_csv_atomic(resources_dir / "Storage.csv", STORAGE_FIELDS, storage_rows)
-        write_csv_atomic(resources_dir / "Hydro.csv", HYDRO_FIELDS, hydro_rows)
+        if args.hydro_as_vre:
+            (resources_dir / "Hydro.csv").unlink(missing_ok=True)
+        else:
+            write_csv_atomic(resources_dir / "Hydro.csv", HYDRO_FIELDS, hydro_rows)
         write_csv_atomic(resources_dir / "Resource_multistage_data.csv", MULTISTAGE_FIELDS, multistage_rows)
         write_csv_atomic(policy_assignments_dir / "Resource_capacity_reserve_margin.csv",
                           DERATING_FIELDS, derating_rows)

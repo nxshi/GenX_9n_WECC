@@ -45,10 +45,10 @@ NODE_AREA = {
 }
 CAP_RES_AREAS = ("CAISO", "Central", "North", "South")
 # EPRI's reserve rule counts each area's installed capacity and does not mention
-# transmission, so line flows stay out of the reserve constraints. Set True for the
-# sensitivity in which areas count imports and lose credit for exports. Dispatch is
-# unaffected either way: flows always remain in GenX's hourly power balance.
-COUNT_LINE_FLOWS_IN_RESERVES = False
+# transmission, so line flows stay out of the reserve constraints by default. The
+# --count-line-flows option is the sensitivity in which areas count imports and lose
+# credit for exports. Dispatch is unaffected either way: flows always remain in GenX's
+# hourly power balance.
 
 
 def read_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
@@ -82,19 +82,19 @@ def network_header_for_areas(header: list[str]) -> list[str]:
     return kept[:start] + reserve_fields + kept[start:]
 
 
-def line_reserve_fields(source_row: dict[str, str]) -> dict[str, str]:
+def line_reserve_fields(source_row: dict[str, str], count_line_flows: bool) -> dict[str, str]:
     """Reserve columns for one line, whose flow is positive from NodeFrom to NodeTo.
 
     GenX subtracts CapRes_Excl_N * DerateCapRes_N * flow from region N's available
     capacity, so 1 marks an export from the area, -1 an import, and 0 a line that does
     not count, either because it does not cross the area's boundary or because
-    COUNT_LINE_FLOWS_IN_RESERVES is False.
+    count_line_flows is False.
     """
     start_area, end_area = NODE_AREA[source_row["NodeFrom"]], NODE_AREA[source_row["NodeTo"]]
     fields = {}
     for number, area in enumerate(CAP_RES_AREAS, start=1):
         fields[f"DerateCapRes_{number}"] = source_row["SecurityFactor"]
-        crosses = COUNT_LINE_FLOWS_IN_RESERVES and start_area != end_area
+        crosses = count_line_flows and start_area != end_area
         sign = 1 if crosses and start_area == area else -1 if crosses and end_area == area else 0
         fields[f"CapRes_Excl_{number}"] = str(sign)
     return fields
@@ -109,7 +109,8 @@ def verify_outputs(inputs_root: Path, demand_by_year: dict, availability_by_year
                    network_rows: list[dict[str, str]], parameter: dict[str, str],
                    demand_header: list[str], variability_header: list[str],
                    fuel_header: list[str], network_header: list[str],
-                   demand_template: list[dict[str, str]], fuel_values: dict[str, tuple[str, str]]) -> None:
+                   demand_template: list[dict[str, str]], fuel_values: dict[str, tuple[str, str]],
+                   count_line_flows: bool) -> None:
     """Reconcile every converted system value against its PM source or approved default."""
     failures: list[str] = []
 
@@ -178,7 +179,7 @@ def verify_outputs(inputs_root: Path, demand_by_year: dict, availability_by_year
                 "transmission_path_name": f'{source_row["NodeFrom"]}_to_{source_row["NodeTo"]}',
                 "distance_mile": source_row["Length"],
                 "Line_Loss_Percentage": source_row["LossFactor"],
-                **line_reserve_fields(source_row),
+                **line_reserve_fields(source_row, count_line_flows),
                 "Line_Max_Flow_Possible_MW": source_row["TTC"],
             }
             for field, value in expected.items():
@@ -194,6 +195,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--inputs-root", type=Path, default=root, help="GenX inputs directory; defaults to this script's directory")
     parser.add_argument("--source", type=Path, help="Project-manager data directory; defaults to WECC-9n test system/data below inputs-root")
+    parser.add_argument("--count-line-flows", action="store_true", help="Count imports and exports in each area's reserve constraint")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", help="Validate the delivery without replacing any files")
     mode.add_argument("--verify", action="store_true", help="Reconcile existing system inputs against the PM delivery without replacing files")
@@ -274,7 +276,7 @@ def main() -> int:
     if args.verify:
         verify_outputs(inputs_root, demand_by_year, availability_by_year, network_rows,
                        parameter_rows[0], demand_header, variability_header, fuel_header,
-                       network_header, demand_template, fuel_values)
+                       network_header, demand_template, fuel_values, args.count_line_flows)
         return 0
 
     ens_cost = parameter_rows[0]["ENSCost"]
@@ -322,7 +324,7 @@ def main() -> int:
                 "transmission_path_name": f'{source_row["NodeFrom"]}_to_{source_row["NodeTo"]}',
                 "distance_mile": source_row["Length"],
                 "Line_Loss_Percentage": source_row["LossFactor"],
-                **line_reserve_fields(source_row),
+                **line_reserve_fields(source_row, args.count_line_flows),
                 "Line_Max_Flow_Possible_MW": source_row["TTC"],
             })
             network_out.append(row)

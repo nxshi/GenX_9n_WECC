@@ -17,6 +17,9 @@ FILE_NAMES = {
     "kmeans_myopic": "genx-kmeans-myopic-results.xlsx",
     "sampled_myopic": "genx-sampled-weeks-myopic-results.xlsx",
     "sampled_ddp": "genx-sampled-weeks-ddp-results.xlsx",
+    "sampled_ddp_area_reserves": "genx-sampled-weeks-ddp-area-reserves-results.xlsx",
+    "sampled_ddp_hydro_ror": "genx-sampled-weeks-ddp-hydro-ror-results.xlsx",
+    "sampled_ddp_imports_hydro_ror": "genx-sampled-weeks-ddp-imports-hydro-ror-results.xlsx",
 }
 
 
