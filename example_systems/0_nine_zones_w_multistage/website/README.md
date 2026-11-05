@@ -26,7 +26,7 @@ source and generated files together so collaborators see the same website.
 
 The data builder expects these items in the parent case directory:
 
-- `Results_EPRI.xlsb`
+- `Results_EPRI.xlsx`
 - `results_kmeans_myopic/`
 - `results_sampled_myopic/`
 

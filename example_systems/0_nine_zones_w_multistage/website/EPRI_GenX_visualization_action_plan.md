@@ -5,7 +5,7 @@ _Last updated 2026-09-29._
 Covers `website/tools/build_results_data.py` (the script that turns the EPRI
 workbook and GenX result folders into `dist/data/results-data.js`) and the
 result sets it visualizes. Every finding below was checked by rebuilding the
-number independently from raw files (source data, `Results_EPRI.xlsb`, GenX
+number independently from raw files (source data, `Results_EPRI.xlsx`, GenX
 CSVs), not by reading the code alone. We do **not** have EPRI's model code, so
 statements about how EPRI computed a number are inferences from its output
 files; those are marked "to confirm with EPRI".
@@ -39,7 +39,7 @@ later years look like real modeling differences, not reporting problems (see
 ## How the website is built
 
 1. `tools/build_results_data.py --case-root .. --output dist/data/results-data.js`
-   reads `Results_EPRI.xlsb`, `results_kmeans_myopic/`, `results_sampled_myopic/`,
+   reads `Results_EPRI.xlsx`, `results_kmeans_myopic/`, `results_sampled_myopic/`,
    and source files under `inputs/` (`Demand.csv`, `Parameter.csv`,
    `Period_map.csv`).
 2. `dist/index.html` / `compare.html` + `app.js` draw Chart.js charts from
@@ -151,7 +151,7 @@ is realistic for this footprint is a data-scope question for EPRI, not a
 reporting issue.
 
 **Question for EPRI (Sean Ericson, sericson@epri.com):**
-> In `Results_EPRI.xlsb`, are the `vAreaEmission` values on the Emissions tab
+> In `Results_EPRI.xlsx`, are the `vAreaEmission` values on the Emissions tab
 > already multiplied by the representative-period weight (~4.01 = 8760/2184)?
 > The Generation tab values appear to be unweighted hourly GW. Summing
 > `vAreaEmission` gives ~61.7 Mt for 2025. Is that the annual total?

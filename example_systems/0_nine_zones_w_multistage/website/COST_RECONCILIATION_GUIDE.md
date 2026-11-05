@@ -1,7 +1,7 @@
 # EPRI vs. GenX Cost Reconciliation Guide
 
 _Written 2026-09-29; section C added 2026-11-01. Reference for anyone comparing system costs between
-`Results_EPRI.xlsb` and GenX `costs.csv` outputs._
+`Results_EPRI.xlsx` and GenX `costs.csv` outputs._
 
 ## The short version
 

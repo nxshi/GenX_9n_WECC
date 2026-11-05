@@ -481,14 +481,14 @@ def source_starting_fleet(source_root: Path):
 
 
 def epri_scenario(case_root: Path, source_root: Path, discount_rate: float, base_year: int):
-    workbook = case_root / "Results_EPRI.xlsb"
-    costs = pd.read_excel(workbook, sheet_name="System Cost", header=2, engine="pyxlsb")
-    buildout_raw = pd.read_excel(workbook, sheet_name="Buildout", header=None, engine="pyxlsb")
+    workbook = case_root / "Results_EPRI.xlsx"
+    costs = pd.read_excel(workbook, sheet_name="System Cost", header=2, engine="openpyxl")
+    buildout_raw = pd.read_excel(workbook, sheet_name="Buildout", header=None, engine="openpyxl")
     buildout = table_from_row_header(buildout_raw, occurrence=1)
-    retirement_raw = pd.read_excel(workbook, sheet_name="Retirement", header=None, engine="pyxlsb")
+    retirement_raw = pd.read_excel(workbook, sheet_name="Retirement", header=None, engine="openpyxl")
     retirement = table_from_row_header(retirement_raw, occurrence=1)
-    generation = pd.read_excel(workbook, sheet_name="Generation", header=2, engine="pyxlsb")
-    storage_raw = pd.read_excel(workbook, sheet_name="Storage", header=None, engine="pyxlsb")
+    generation = pd.read_excel(workbook, sheet_name="Generation", header=2, engine="openpyxl")
+    storage_raw = pd.read_excel(workbook, sheet_name="Storage", header=None, engine="openpyxl")
     storage_charge = storage_raw.iloc[3:, 7:11].copy()
     storage_charge.columns = ["Year", "LoadLevel", "Unit", "vESSCharge"]
     storage_charge["Year"] = pd.to_numeric(storage_charge["Year"], errors="coerce")
@@ -496,7 +496,7 @@ def epri_scenario(case_root: Path, source_root: Path, discount_rate: float, base
     storage_charge = storage_charge.dropna(subset=["Year", "LoadLevel"])
     storage_charge["Year"] = storage_charge["Year"].astype(int)
     storage_charge["LoadLevel"] = storage_charge["LoadLevel"].astype(str)
-    emissions = pd.read_excel(workbook, sheet_name="Emissions", header=2, engine="pyxlsb")
+    emissions = pd.read_excel(workbook, sheet_name="Emissions", header=2, engine="openpyxl")
     demand = pd.read_csv(source_root / "Demand.csv")
     weeks = epri_weeks(generation)
     profiles = epri_profiles(generation, storage_charge, demand, weeks)
@@ -564,7 +564,7 @@ def epri_scenario(case_root: Path, source_root: Path, discount_rate: float, base
     return {
         "id": "epri",
         "label": "EPRI",
-        "source": "EPRI delivered Results_EPRI.xlsb",
+        "source": "EPRI delivered Results_EPRI.xlsx",
         "profile_note": "Generation is from the EPRI workbook. Demand is matched from Demand.csv by timestamp.",
         "capacity_note": "Cumulative net buildout (GW): additions minus retirements. Installed capacity adds this net change to the starting fleet in the source Generation.csv.",
         "emissions_note": "Annual emissions (million tonnes): sum of vAreaEmission, which already includes the representative-period weight.",
