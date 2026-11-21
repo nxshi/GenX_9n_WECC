@@ -495,7 +495,11 @@ end
             "MultiStage" => 1,
             "MultiStageSettingsDict" => multistage_setup,
             "CapacityReserveMargin" => 2)
-        EP, inputs, _ = run_case(case, setup)
+        # Run from the temporary copy: the DDP algorithm writes to the relative folder "results"
+        EP, inputs, _ = cd(case) do
+            mkpath("results")
+            run_case(case, setup)
+        end
         settings = merge(GenX.default_settings(), setup)
         for p in 1:3
             # The requirement is met in every stage
