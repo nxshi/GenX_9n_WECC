@@ -40,7 +40,11 @@ Store the annual capacity accreditation factors (`Annual_Derating_Factor_*` colu
 The annual formulation multiplies these factors by installed capacity, while the hourly formulation
 multiplies `Derating_Factor_*` by hourly availability, so the two are not interchangeable. To avoid
 silently reusing hourly derating factors as capacity credits, an error is thrown if the annual column
-of any requirement is missing.
+of any requirement is missing. An error is also thrown if a value is blank, not finite, or outside
+[0, 1], or if a resource has a non-zero factor for a requirement that does not include its zone
+(capacity located outside a requirement can only contribute through transmission, otherwise it
+could be counted both directly and in the transfers backed by its zone). Resources that are not
+listed in the file have a factor of zero.
 """
 function load_annual_derating_factors!(gen::Vector{<:AbstractResource},
         res::UnitRange{Int},
@@ -54,7 +58,28 @@ function load_annual_derating_factors!(gen::Vector{<:AbstractResource},
               "factors (e.g., ELCC or UCAP fractions) applied to installed capacity, and differ " *
               "from the Derating_Factor_* columns used by the hourly formulation.")
     end
-    inputs["ANNUAL_DERATING_FACTOR"] = [annual_derating_factor(g, tag = r) for g in gen, r in res]
+    factors = [annual_derating_factor(g, tag = r) for g in gen, r in res]
+    valid(x) = x isa Real && isfinite(x) && 0 <= x <= 1
+    invalid = [(resource_name(gen[y]), r, factors[y, r]) for y in eachindex(gen), r in res
+               if !valid(factors[y, r])]
+    if !isempty(invalid)
+        entries = join(("$name (Annual_Derating_Factor_$r = $x)" for (name, r, x) in invalid), ", ")
+        error("Annual_Derating_Factor_* values in Resource_capacity_reserve_margin.csv must be " *
+              "numbers between 0 and 1 (blank cells are not allowed). Invalid values: " * entries)
+    end
+    # Resources can only be accredited to the requirements that include their zone
+    margin = inputs["dfCapRes"]
+    outside = [(resource_name(gen[y]), zone_id(gen[y]), r) for y in eachindex(gen), r in res
+               if factors[y, r] != 0 && margin[zone_id(gen[y]), r] == 0]
+    if !isempty(outside)
+        entries = join(("$name (zone $z, Annual_Derating_Factor_$r)" for (name, z, r) in outside),
+            ", ")
+        error("Annual_Derating_Factor_* must be zero for resources located in zones that are not " *
+              "part of the requirement (zones with a zero margin in Capacity_reserve_margin.csv); " *
+              "capacity located outside a requirement can only contribute through transmission " *
+              "(CapRes_Excl_* in Network.csv). Invalid values: " * entries)
+    end
+    inputs["ANNUAL_DERATING_FACTOR"] = Float64.(factors)
     return nothing
 end
 

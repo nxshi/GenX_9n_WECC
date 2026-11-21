@@ -1,6 +1,7 @@
 module TestCapacityReserveMargin
 
 using Test
+using YAML
 
 include(joinpath(@__DIR__, "utilities.jl"))
 
@@ -85,7 +86,7 @@ end
 
 @testset "Annual formulation" begin
     EP, inputs, _ = run_case(test_path, annual_setup)
-    test_objective(EP, 6860.7921, test_path * "_annual")
+    test_objective(EP, 6860.8197, test_path * "_annual")
     tol = feasibility_tolerance(EP)
 
     # None of the hourly formulation objects are created
@@ -113,8 +114,21 @@ end
     line_capacity = value.(EP[:eAvail_Trans_Cap])
     @test all(abs(transfer[l]) <= line_capacity[l] + tol for l in 1:inputs["L"])
 
+    # Transfers are backed by the firm capacity of the exporting zone (largest annual factor)
+    firm = [sum(maximum(capresfactor[y, :]) * capacity[y]
+                for y in GenX.resources_in_zone_by_rid(inputs["RESOURCES"], z))
+            for z in 1:inputs["Z"]]
+    @test value.(EP[:eCapResAnnualFirmCapacity]) ≈ firm
+    net_export = inputs["pNet_Map"]' * [transfer[l] for l in 1:inputs["L"]]
+    @test all(net_export .<= firm .+ tol)
+
     price = GenX.capacity_reserve_margin_price_annual(EP, annual_setup)
     @test all(price .>= 0)
+
+    # Prices do not depend on the objective scaling
+    scaled_setup = merge(annual_setup, Dict("ObjScale" => 0.01))
+    EP_scaled, _, _ = run_case(test_path, scaled_setup)
+    @test GenX.capacity_reserve_margin_price_annual(EP_scaled, scaled_setup)≈price rtol=1e-3
 
     # Outputs
     settings = merge(GenX.default_settings(), annual_setup)
@@ -154,6 +168,173 @@ end
         settings = merge(GenX.default_settings(), annual_setup)
         @test_throws ErrorException redirect_stdout(() -> GenX.load_inputs(settings, case),
             devnull)
+    end
+end
+
+@testset "Annual derating factors must be between 0 and 1" begin
+    settings = merge(GenX.default_settings(), annual_setup)
+    for bad in ("1.2", "-0.1", "NaN", "")
+        with_case_copy(test_path) do case
+            file = joinpath(case, "resources", "policy_assignments",
+                "Resource_capacity_reserve_margin.csv")
+            lines = readlines(file)
+            # Annual_Derating_Factor_1 of MA_natural_gas_combined_cycle
+            cells = split(lines[2], ",")
+            cells[4] = bad
+            lines[2] = join(cells, ",")
+            write(file, join(lines, "\n") * "\n")
+            @test_throws "MA_natural_gas_combined_cycle (Annual_Derating_Factor_1" redirect_stdout(
+                () -> GenX.load_inputs(settings, case), devnull)
+        end
+    end
+end
+
+@testset "Annual formulation: transfers need firm capacity in the exporting zone" begin
+    with_case_copy(test_path) do case
+        # ME (end of line 2, MA_to_ME) has no accredited capacity
+        file = joinpath(case, "resources", "policy_assignments",
+            "Resource_capacity_reserve_margin.csv")
+        df = CSV.read(file, DataFrame)
+        me = startswith.(df.Resource, "ME_")
+        df[me, :Annual_Derating_Factor_1] .= 0.0
+        df[me, :Annual_Derating_Factor_2] .= 0.0
+        CSV.write(file, df)
+        EP, inputs, _ = run_case(case, annual_setup)
+        tol = feasibility_tolerance(EP)
+        @test value(EP[:eCapResAnnualFirmCapacity][3])≈0 atol=tol
+        # So ME cannot export firm capacity to MA (a negative transfer flows from ME to MA)...
+        @test value(EP[:vCAPRES_TRANSFER][2]) >= -tol
+        # ...and the MA requirement is met with local capacity and imports from CT
+        _, requirement = GenX.annual_capacity_reserve_requirement(inputs)
+        @test value(EP[:eCapResMarBalanceAnnual][2]) >= requirement[2] - tol
+    end
+end
+
+# Helpers to change the requirements and the transmission inputs of a copy of the test case
+function write_requirements!(case, margins::Matrix{Float64})
+    rows = ["MA,z1", "CT,z2", "ME,z3"]
+    header = "," * join(["Network_zones"; ["CapRes_$r" for r in 1:size(margins, 2)]], ",")
+    write(joinpath(case, "policies", "Capacity_reserve_margin.csv"),
+        join([header; [rows[z] * "," * join(margins[z, :], ",") for z in 1:3]], "\n") * "\n")
+end
+function set_network!(case; excl::Matrix{Int}, derate::Matrix{Float64},
+        max_reinforcement::Union{Nothing, Float64} = nothing)
+    file = joinpath(case, "system", "Network.csv")
+    df = CSV.read(file, DataFrame)
+    for r in 1:size(excl, 2)
+        df[!, "CapRes_Excl_$r"] = [l <= 2 ? excl[l, r] : missing for l in 1:3]
+        df[!, "DerateCapRes_$r"] = [l <= 2 ? derate[l, r] : missing for l in 1:3]
+    end
+    if !isnothing(max_reinforcement)
+        df.Line_Max_Reinforcement_MW = [l <= 2 ? max_reinforcement : missing for l in 1:3]
+    end
+    CSV.write(file, df)
+end
+# Annual factors of the base case for the requirements covering the resource's zone, zero otherwise
+in_region_factors(regions) = (name, base, r) -> any(startswith(name, z * "_") for z in regions[r]) ?
+                                                base : 0.0
+function set_factors!(case, factor::Function, NCRM::Int)
+    file = joinpath(case, "resources", "policy_assignments",
+        "Resource_capacity_reserve_margin.csv")
+    df = CSV.read(file, DataFrame)
+    for r in 1:NCRM
+        df[!, "Annual_Derating_Factor_$r"] = [factor(name, base, r)
+                                              for (name, base) in zip(df.Resource,
+            df.Annual_Derating_Factor_1)]
+    end
+    CSV.write(file, df)
+end
+
+@testset "Annual formulation: transit over lines inside the requirement regions" begin
+    with_case_copy(test_path) do case
+        # CapRes_2 covers CT only, whose only boundary line is MA_to_CT (line 1, entering CT).
+        # MA_to_ME (line 2) does not cross any boundary. No resource is accredited to CapRes_2 and
+        # MA resources are not accredited at all, so the CT requirement must be met with capacity
+        # from ME, through MA. The lines can be expanded enough to carry it.
+        write_requirements!(case, [0.15 0; 0.15 0.15; 0.15 0])
+        set_network!(case; excl = [0 -1; 0 0], derate = fill(0.95, 2, 2),
+            max_reinforcement = 8000.0)
+        set_factors!(case,
+            (name, base, r) -> r == 1 && !startswith(name, "MA_") ? base : 0.0, 2)
+        EP, inputs, _ = run_case(case, annual_setup)
+        tol = feasibility_tolerance(EP)
+        factor = inputs["ANNUAL_DERATING_FACTOR"]
+        MA = findall(startswith("MA_"), inputs["RESOURCE_NAMES"])
+        @test all(iszero, factor[:, 2])
+        @test all(iszero, factor[MA, :])
+        @test termination_status(EP) == JuMP.MOI.OPTIMAL
+        @test GenX.annual_capacity_reserve_transfer_lines(inputs) == [1, 2]
+        transfer = value.(EP[:vCAPRES_TRANSFER])
+        _, requirement = GenX.annual_capacity_reserve_requirement(inputs)
+        @test 0.95 * transfer[1] >= requirement[2] - tol   # imports from MA cover the CT requirement
+        @test transfer[2] <= -transfer[1] + tol            # and come from ME, through MA
+    end
+end
+
+@testset "Annual formulation: transmission inputs are validated" begin
+    margins = [0.15 0.15 0; 0.15 0 0.15; 0.15 0 0.15]  # all zones, MA, and CT + ME
+    cases = [
+        # MA_to_CT leaves MA, so CapRes_Excl_2 must be 1
+        (excl = [0 -1 0; 0 1 0], derate = fill(0.95, 2, 3), message = "line 1 has CapRes_Excl_2"),
+        # Both lines cross the boundaries of CapRes_2 and CapRes_3, but line 2 is only
+        # eligible for CapRes_2
+        (excl = [0 1 -1; 0 1 0], derate = fill(0.95, 2, 3),
+            message = "line 2 crosses the boundaries of CapRes_2, CapRes_3"),
+        # The boundary lines of CapRes_2 have different derating factors
+        (excl = [0 1 -1; 0 1 -1], derate = [0.95 0.95 0.95; 0.95 0.5 0.95],
+            message = "different DerateCapRes_2"),
+        # The same lines have different derating factors for MA and for CT + ME, so a transfer
+        # would add 1.0 MW to CT + ME for each 0.95 MW it removes from MA
+        (excl = [0 1 -1; 0 1 -1], derate = [0.95 0.95 1.0; 0.95 0.95 1.0],
+            message = "line 1 has different DerateCapRes values for CapRes_2")]
+    for c in cases
+        with_case_copy(test_path) do case
+            write_requirements!(case, margins)
+            set_network!(case; excl = c.excl, derate = c.derate)
+            set_factors!(case, in_region_factors([["MA", "CT", "ME"], ["MA"], ["CT", "ME"]]), 3)
+            @test_throws c.message run_case(case, annual_setup)
+        end
+    end
+end
+
+@testset "Annual derating factors are zero outside the requirement's zones" begin
+    with_case_copy(test_path) do case
+        # CT_onshore_wind (zone 2) accredited to CapRes_2, which covers MA only
+        file = joinpath(case, "resources", "policy_assignments",
+            "Resource_capacity_reserve_margin.csv")
+        df = CSV.read(file, DataFrame)
+        df[df.Resource .== "CT_onshore_wind", :Annual_Derating_Factor_2] .= 0.2
+        CSV.write(file, df)
+        settings = merge(GenX.default_settings(), annual_setup)
+        @test_throws "CT_onshore_wind (zone 2, Annual_Derating_Factor_2)" redirect_stdout(
+            () -> GenX.load_inputs(settings, case), devnull)
+    end
+end
+
+@testset "Annual formulation: exporters covered by their own requirement" begin
+    # In the base case, CT and ME export to the MA requirement but are only covered by the
+    # system-wide requirement, so their exports are not subtracted from their own requirement
+    settings = merge(GenX.default_settings(), annual_setup)
+    inputs = redirect_stdout(() -> GenX.load_inputs(settings, test_path), devnull)
+    @test GenX.annual_capacity_reserve_uncovered_exports(inputs) ==
+          [(zone = 2, line = 1, requirement = 2), (zone = 3, line = 2, requirement = 2)]
+
+    # With a requirement for CT + ME, whose boundary lines are the same, the exports are subtracted
+    with_case_copy(test_path) do case
+        write_requirements!(case, [0.15 0.15 0; 0.15 0 0.15; 0.15 0 0.15])
+        set_network!(case; excl = [0 1 -1; 0 1 -1], derate = fill(0.95, 2, 3))
+        set_factors!(case, in_region_factors([["MA", "CT", "ME"], ["MA"], ["CT", "ME"]]), 3)
+        EP, inputs, _ = run_case(case, annual_setup)
+        tol = feasibility_tolerance(EP)
+        @test isempty(GenX.annual_capacity_reserve_uncovered_exports(inputs))
+        transfer = value.(EP[:vCAPRES_TRANSFER])
+        capacity = value.(EP[:eCapResAnnualCapacity])
+        factor = inputs["ANNUAL_DERATING_FACTOR"]
+        _, requirement = GenX.annual_capacity_reserve_requirement(inputs)
+        balance = value.(EP[:eCapResMarBalanceAnnual])
+        # CT + ME: local capacity minus what they send to MA (negative transfers)
+        @test balance[3] ≈ factor[:, 3]' * capacity + 0.95 * (transfer[1] + transfer[2])
+        @test all(balance .>= requirement .- tol)
     end
 end
 
@@ -201,6 +382,84 @@ end
         @test normalized_coefficient(EP[:cCapacityResMarginAnnual][1], EP[:vCAP][y]) ≈ -1.15
         @test value(EP[:eTotalCap][y]) > 0
         @test value(EP[:eCapResAnnualElectrolyzer][1]) ≈ 1.15 * value(EP[:eTotalCap][y])
+    end
+end
+
+@testset "Annual formulation with co-located VRE and storage" begin
+    setup = Dict("NetworkExpansion" => 1,
+        "UCommit" => 2,
+        "CO2Cap" => 1,
+        "StorageLosses" => 1,
+        "VirtualChargeDischargeCost" => 1,
+        "ParameterScale" => 1,
+        "CapacityReserveMargin" => 2)
+    # For testing, use the hourly derating factors as annual factors
+    function add_annual_factors!(case)
+        file = joinpath(case, "resources", "policy_assignments",
+            "Resource_capacity_reserve_margin.csv")
+        df = CSV.read(file, DataFrame)
+        for res in 1:3
+            df[!, "Annual_Derating_Factor_$res"] = df[!, "Derating_Factor_$res"]
+        end
+        CSV.write(file, df)
+    end
+    # Capacity that the components of co-located resource y can deliver to the grid
+    function deliverable(EP, inputs, y)
+        gen = inputs["RESOURCES"]
+        cap(sym) = value(EP[sym][y])
+        dc = 0.0
+        if y in inputs["VS_DC"]
+            dc_sources = (y in inputs["VS_SOLAR"] ? cap(:eTotalCap_SOLAR) : 0.0) +
+                         (y in inputs["VS_SYM_DC"] ?
+                          GenX.power_to_energy_dc(gen[y]) * cap(:eTotalCap_STOR) : 0.0) +
+                         (y in inputs["VS_ASYM_DC_DISCHARGE"] ?
+                          cap(:eTotalCapDischarge_DC) : 0.0)
+            dc = min(cap(:eTotalCap_DC), GenX.etainverter(gen[y]) * dc_sources)
+        end
+        ac = (y in inputs["VS_WIND"] ? cap(:eTotalCap_WIND) : 0.0) +
+             (y in inputs["VS_SYM_AC"] ?
+              GenX.power_to_energy_ac(gen[y]) * cap(:eTotalCap_STOR) : 0.0) +
+             (y in inputs["VS_ASYM_AC_DISCHARGE"] ? cap(:eTotalCapDischarge_AC) : 0.0)
+        return min(cap(:eTotalCap), ac + dc)
+    end
+    credited(inputs) = filter(y -> any(!=(0), inputs["ANNUAL_DERATING_FACTOR"][y, :]),
+        inputs["VRE_STOR"])
+
+    # The credited capacity is bounded by the grid connection and by the components
+    with_case_copy(joinpath("VRE_storage", "solar_wind")) do case
+        add_annual_factors!(case)
+        EP, inputs, _ = run_case(case, setup)
+        tol = feasibility_tolerance(EP)
+        VS = credited(inputs)
+        @test !isempty(VS)
+        for y in VS
+            @test value(EP[:vCAPRES_ANNUAL_VS][y]) <= deliverable(EP, inputs, y) + tol
+        end
+    end
+
+    # A grid connection without components is not credited: 1000 MW of existing grid connection
+    # for each co-located resource, no existing components and no new builds
+    with_case_copy(joinpath("VRE_storage", "solar_wind")) do case
+        add_annual_factors!(case)
+        file = joinpath(case, "resources", "Vre_stor.csv")
+        df = CSV.read(file, DataFrame)
+        df.New_Build .= 0
+        df.Can_Retire .= 0
+        df.Existing_Cap_MW .= 1000.0
+        for col in names(df)
+            if (startswith(col, "Existing_Cap_") && col != "Existing_Cap_MW") ||
+               startswith(col, "Min_Cap_")
+                df[!, col] .= 0
+            end
+        end
+        CSV.write(file, df)
+        EP, inputs, _ = run_case(case, setup)
+        tol = feasibility_tolerance(EP)
+        for y in credited(inputs)
+            @test value(EP[:eTotalCap][y]) * GenX.ModelScalingFactor≈1000 rtol=1e-6
+            @test deliverable(EP, inputs, y)≈0 atol=tol
+            @test value(EP[:vCAPRES_ANNUAL_VS][y])≈0 atol=tol
+        end
     end
 end
 
@@ -258,6 +517,37 @@ end
                 @test credit[built] ≈ inputs[p]["ANNUAL_DERATING_FACTOR"][built, 1]
             end
         end
+    end
+end
+
+@testset "Annual formulation with Benders decomposition" begin
+    with_case_copy(joinpath("benders", "4_three_zones_w_policies_slack")) do case
+        file = joinpath(case, "resources", "policy_assignments",
+            "Resource_capacity_reserve_margin.csv")
+        df = CSV.read(file, DataFrame)
+        df.Annual_Derating_Factor_1 = [occursin(r"solar|wind", name) ? 0.25 : factor
+                                       for (name, factor) in zip(df.Resource, df.Derating_Factor_1)]
+        CSV.write(file, df)
+        settings_file = joinpath(case, "settings", "genx_settings.yml")
+        settings = YAML.load_file(settings_file)
+        merge!(settings, Dict("CapacityReserveMargin" => 2, "Benders" => 1, "OverwriteResults" => 1))
+        YAML.write_file(settings_file, settings)
+        redirect_stdout(() -> run_genx_case!(case, HiGHS.Optimizer), devnull)
+
+        # Outputs of the incumbent planning solution, without shadow prices
+        results = joinpath(case, "results_benders")
+        df = CSV.read(joinpath(results, "ReserveMargin_annual.csv"), DataFrame)
+        @test !("Price_USD_per_MW_yr" in names(df))
+        @test all(df.Accredited_Capacity_MW .+ df.Net_Import_MW .+ df.Slack_MW .>=
+                  df.Requirement_MW .- 1e-3)
+        @test isfile(joinpath(results, "CapacityCredit.csv"))
+
+        # The slack penalty is part of the planning costs
+        slack = CSV.read(joinpath(results, "ReserveMargin_slack_and_penalties.csv"), DataFrame)
+        costs = CSV.read(joinpath(results, "planning_problem_costs.csv"), DataFrame)
+        penalty = only(costs[costs.Costs .== "cUnmetPlanningPolicyPenalty", :Total])
+        @test sum(slack.Penalty) > 0
+        @test penalty >= sum(slack.Penalty) * (1 - 1e-6)
     end
 end
 

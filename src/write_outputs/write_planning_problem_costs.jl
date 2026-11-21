@@ -50,6 +50,10 @@ function write_planning_problem_costs(path::AbstractString, inputs::Dict, setup:
     if haskey(inputs, "MaxCapPriceCap") && haskey(EP.obj_dict, :eTotalCMaxCapSlack)
         cUnmetPolicy += value(val_fn, EP[:eTotalCMaxCapSlack])
     end
+    # Annual capacity reserve margin slack (the constraint is part of the planning problem)
+    if haskey(inputs, "dfCapRes_slack") && haskey(EP.obj_dict, :eCTotalCapResSlack)
+        cUnmetPolicy += value(val_fn, EP[:eCTotalCapResSlack])
+    end
 
     # Per-zone fixed cost from the incumbent planning solution (raw model units).
     cfix_zone = zeros(Z)

@@ -1,29 +1,25 @@
 @doc raw"""
-	annual_capacity_reserve_contribution(EP::Model, inputs::Dict, res::Int)
+	annual_capacity_reserve_contribution(EP::Model, inputs::Dict, res::Int; val::Function = value)
 
 Return a vector (one entry per resource, in model units) with the contribution of each resource to
-the annual capacity reserve margin requirement `res` at the optimal solution. Electrolyzers have a
-negative contribution, equal to the requirement they add (see [`cap_reserve_margin_annual!`](@ref)).
+the annual capacity reserve margin requirement `res` at the solution: the annual factor times the
+accreditable capacity `eCapResAnnualCapacity`. Electrolyzers have a negative contribution, equal to
+the requirement they add, $-(1 + RM^{CRM}_{z,p}) \times \epsilon^{CRM,annual}_{y,p} \times \Delta^{total}_{y}$
+(see [`cap_reserve_margin_annual!`](@ref)).
+
+`val` returns the value of a variable or expression; it defaults to the value in the solved model and
+is used to evaluate the incumbent planning solution with Benders decomposition.
 """
-function annual_capacity_reserve_contribution(EP::Model, inputs::Dict, res::Int)
+function annual_capacity_reserve_contribution(EP::Model,
+        inputs::Dict,
+        res::Int;
+        val::Function = value)
     gen = inputs["RESOURCES"]
     capresfactor = inputs["ANNUAL_DERATING_FACTOR"][:, res]
     margin = inputs["dfCapRes"][:, res]
-    ELECTROLYZERS = inputs["ELECTROLYZER"]
-    ALLAM_CYCLE_LOX = inputs["ALLAM_CYCLE_LOX"]
 
-    contribution = capresfactor .* value.(EP[:eTotalCap])
-    if !isempty(ALLAM_CYCLE_LOX)
-        sco2turbine, asu = 1, 2
-        eTotalCapAllam = value.(EP[:eTotalCap_AllamcycleLOX])
-        for y in ALLAM_CYCLE_LOX
-            asu_power_use = gen[y].lox_poweruserate_o2 + gen[y].gox_poweruserate_o2 +
-                            gen[y].poweruserate_other
-            contribution[y] = capresfactor[y] * (eTotalCapAllam[y, sco2turbine] -
-                               asu_power_use * eTotalCapAllam[y, asu])
-        end
-    end
-    for y in ELECTROLYZERS
+    contribution = capresfactor .* val.(EP[:eCapResAnnualCapacity])
+    for y in inputs["ELECTROLYZER"]
         contribution[y] *= -(1 + margin[zone_id(gen[y])])
     end
     return contribution
@@ -33,15 +29,17 @@ end
 	capacity_reserve_margin_price_annual(EP::Model, setup::Dict)::Vector{Float64}
 
 Marginal price of each annual capacity reserve margin requirement, i.e. the dual variable of
-`cCapacityResMarginAnnual`, in US\$/MW-yr.
+`cCapacityResMarginAnnual`, in US\$/MW-yr. The objective scaling (`ObjScale`) and the parameter
+scaling (`ParameterScale`) are removed.
 """
 function capacity_reserve_margin_price_annual(EP::Model, setup::Dict)::Vector{Float64}
     scale_factor = setup["ParameterScale"] == 1 ? ModelScalingFactor : 1
-    return dual.(EP[:cCapacityResMarginAnnual]) * scale_factor
+    return dual.(EP[:cCapacityResMarginAnnual]) * scale_factor / get(setup, "ObjScale", 1)
 end
 
 @doc raw"""
-	write_reserve_margin_annual(path::AbstractString, inputs::Dict, setup::Dict, EP::Model)
+	write_reserve_margin_annual(path::AbstractString, inputs::Dict, setup::Dict, EP::Model;
+		val::Function = value, prices::Bool = has_duals(EP) && setup["MultiStage"] == 0)
 
 Write `ReserveMargin_annual.csv`, with one row per annual capacity reserve margin requirement and
 the following columns (MW unless noted):
@@ -52,14 +50,18 @@ the following columns (MW unless noted):
 - `Accredited_Capacity_MW`: accredited capacity of all other resources.
 - `Net_Import_MW`: derated net transfer into the region over eligible lines.
 - `Slack_MW`: unmet requirement (only if `Capacity_reserve_margin_slack.csv` is provided).
-- `Price_USD_per_MW_yr`: shadow price of the requirement (only if duals are available). It is not
-  written for multi-stage runs, where the shadow prices include the discounting of the stage, as
-  for the other price outputs that are not written for multi-stage runs.
+- `Price_USD_per_MW_yr`: shadow price of the requirement (only if `prices` is true). By default it
+  is not written for multi-stage runs, where the shadow prices include the discounting of the stage,
+  as for the other price outputs that are not written for multi-stage runs.
+
+`val` returns the value of a variable or expression (see [`annual_capacity_reserve_contribution`](@ref)).
 """
 function write_reserve_margin_annual(path::AbstractString,
         inputs::Dict,
         setup::Dict,
-        EP::Model)
+        EP::Model;
+        val::Function = value,
+        prices::Bool = has_duals(EP) && setup["MultiStage"] == 0)
     scale_factor = setup["ParameterScale"] == 1 ? ModelScalingFactor : 1
     NCRM = inputs["NCapacityReserveMargin"]
     ELECTROLYZERS = inputs["ELECTROLYZER"]
@@ -68,12 +70,13 @@ function write_reserve_margin_annual(path::AbstractString,
     peak_t, requirement = annual_capacity_reserve_requirement(inputs)
     peak_demand = [sum((inputs["pD"][peak_t[res], z] for z in findall(!=(0), margin[:, res]));
                        init = 0.0) for res in 1:NCRM]
-    contribution = [annual_capacity_reserve_contribution(EP, inputs, res) for res in 1:NCRM]
+    contribution = [annual_capacity_reserve_contribution(EP, inputs, res; val = val)
+                    for res in 1:NCRM]
     electrolyzer = [sum((-contribution[res][y] for y in ELECTROLYZERS); init = 0.0)
                     for res in 1:NCRM]
     accredited = [sum(contribution[res]) + electrolyzer[res] for res in 1:NCRM]
     net_import = haskey(EP, :eCapResAnnualNetImport) ?
-                 value.(EP[:eCapResAnnualNetImport]) : zeros(NCRM)
+                 val.(EP[:eCapResAnnualNetImport]) : zeros(NCRM)
 
     df = DataFrame(Constraint = [Symbol("CapRes_$res") for res in 1:NCRM],
         Peak_Time_Index = peak_t,
@@ -83,9 +86,9 @@ function write_reserve_margin_annual(path::AbstractString,
         Accredited_Capacity_MW = accredited * scale_factor,
         Net_Import_MW = net_import * scale_factor)
     if haskey(inputs, "dfCapRes_slack")
-        df.Slack_MW = value.(EP[:vCapResSlack]) * scale_factor
+        df.Slack_MW = val.(EP[:vCapResSlack]) * scale_factor
     end
-    if has_duals(EP) && setup["MultiStage"] == 0
+    if prices
         df.Price_USD_per_MW_yr = capacity_reserve_margin_price_annual(EP, setup)
     end
     CSV.write(joinpath(path, "ReserveMargin_annual.csv"), df)
@@ -126,20 +129,23 @@ function write_reserve_margin_revenue_annual(path::AbstractString,
 end
 
 @doc raw"""
-	write_reserve_margin_slack_annual(path::AbstractString, inputs::Dict, setup::Dict, EP::Model)
+	write_reserve_margin_slack_annual(path::AbstractString, inputs::Dict, setup::Dict, EP::Model;
+		val::Function = value)
 
 Write `ReserveMargin_slack_and_penalties.csv` for the annual capacity reserve margin: the slack of
-each requirement (MW) and its penalty (US\$).
+each requirement (MW) and its penalty (US\$). `val` returns the value of a variable or expression
+(see [`annual_capacity_reserve_contribution`](@ref)).
 """
 function write_reserve_margin_slack_annual(path::AbstractString,
         inputs::Dict,
         setup::Dict,
-        EP::Model)
+        EP::Model;
+        val::Function = value)
     scale_factor = setup["ParameterScale"] == 1 ? ModelScalingFactor : 1
     NCRM = inputs["NCapacityReserveMargin"]
     df = DataFrame(CRM_Constraint = [Symbol("CapRes_$res") for res in 1:NCRM],
-        Slack = value.(EP[:vCapResSlack]) * scale_factor,  # MW
-        Penalty = value.(EP[:eCCapResSlack]) * scale_factor^2)  # $
+        Slack = val.(EP[:vCapResSlack]) * scale_factor,  # MW
+        Penalty = val.(EP[:eCCapResSlack]) * scale_factor^2)  # $
     CSV.write(joinpath(path, "ReserveMargin_slack_and_penalties.csv"), df)
     return nothing
 end
