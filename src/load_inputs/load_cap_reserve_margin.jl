@@ -24,7 +24,38 @@ function load_cap_reserve_margin!(setup::Dict, path::AbstractString, inputs::Dic
     res = 1:inputs["NCapacityReserveMargin"]
     inputs["DERATING_FACTOR"] = [derating_factor(g, tag = r) for g in gen, r = res]
 
+    if setup["CapacityReserveMargin"] == 2
+        load_annual_derating_factors!(gen, res, inputs)
+    end
+
     println(filename * " Successfully Read!")
+end
+
+@doc raw"""
+	load_annual_derating_factors!(gen::Vector{<:AbstractResource}, res::UnitRange{Int}, inputs::Dict)
+
+Store the annual capacity accreditation factors (`Annual_Derating_Factor_*` columns of
+`Resource_capacity_reserve_margin.csv`) in `inputs["ANNUAL_DERATING_FACTOR"]` (resources × requirements).
+
+The annual formulation multiplies these factors by installed capacity, while the hourly formulation
+multiplies `Derating_Factor_*` by hourly availability, so the two are not interchangeable. To avoid
+silently reusing hourly derating factors as capacity credits, an error is thrown if the annual column
+of any requirement is missing.
+"""
+function load_annual_derating_factors!(gen::Vector{<:AbstractResource},
+        res::UnitRange{Int},
+        inputs::Dict)
+    missing_cols = [r for r in res
+                    if !any(haskey(g, Symbol("annual_derating_factor_$r")) for g in gen)]
+    if !isempty(missing_cols)
+        error("CapacityReserveMargin = 2 (annual formulation) requires the column(s) " *
+              join(("Annual_Derating_Factor_$r" for r in missing_cols), ", ") *
+              " in Resource_capacity_reserve_margin.csv. These are capacity accreditation " *
+              "factors (e.g., ELCC or UCAP fractions) applied to installed capacity, and differ " *
+              "from the Derating_Factor_* columns used by the hourly formulation.")
+    end
+    inputs["ANNUAL_DERATING_FACTOR"] = [annual_derating_factor(g, tag = r) for g in gen, r in res]
+    return nothing
 end
 
 @doc raw"""

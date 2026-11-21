@@ -659,11 +659,11 @@ Validate the policy files by checking if they exist in the specified folder and 
 function validate_policy_files(resource_policies_path::AbstractString, setup::Dict)
     policyfile_info = _get_policyfile_info()
     for (filenames, setup_param) in values(policyfile_info)
-        if setup[setup_param] == 1 &&
+        if setup[setup_param] > 0 &&
            any(!isfile(joinpath(resource_policies_path, filename))
         for filename in filenames)
             msg = string(setup_param,
-                " is set to 1 in settings but the required file(s) ",
+                " is enabled in settings but the required file(s) ",
                 filenames,
                 " was (were) not found in ",
                 resource_policies_path)
@@ -698,7 +698,7 @@ function validate_policy_dataframe!(filename::AbstractString, policy_in::DataFra
     cols = lowercase.(names(policy_in))
     filter!(col -> col ≠ "resource", cols)
 
-    accepted_cols = ["derating_factor", "esr", "esr_vrestor",
+    accepted_cols = ["derating_factor", "annual_derating_factor", "esr", "esr_vrestor",
         "h2_demand", "hm",
         [string(cap, type) for cap in ["min_cap", "max_cap"]
          for type in ("", "_stor", "_solar", "_wind")]...]

@@ -8,7 +8,7 @@ function storage_all!(EP::Model, inputs::Dict, setup::Dict)
     println("Storage Core Resources Module")
 
     gen = inputs["RESOURCES"]
-    CapacityReserveMargin = setup["CapacityReserveMargin"] > 0
+    CapacityReserveMargin = setup["CapacityReserveMargin"] == 1
     HourlyMatching = setup["HourlyMatchingRequirement"] > 0
 
     virtual_discharge_cost = inputs["VirtualChargeDischargeCost"]
@@ -194,7 +194,7 @@ function storage_all_operation!(EP::Model, inputs::Dict, setup::Dict)
     gen = inputs["RESOURCES"]
     T = inputs["T"]
     p = inputs["hours_per_subperiod"]
-    CapacityReserveMargin = setup["CapacityReserveMargin"] > 0
+    CapacityReserveMargin = setup["CapacityReserveMargin"] == 1
     OperationalReserves = setup["OperationalReserves"] == 1
 
     STOR_ALL = inputs["STOR_ALL"]

@@ -605,7 +605,8 @@ This policy is applied when if `CapacityReserveMargin > 0` in the settings file.
 |**Column Name** | **Description**|
 | :------------ | :-----------|
 |Resource| Resource name corresponding to a resource in one of the resource data files described above.|
-|Derating\_Factor\_*| Fraction of the resource capacity eligible for contributing to the capacity reserve margin constraint (e.g. derate factor).|
+|Derating\_Factor\_*| Fraction of the resource capacity eligible for contributing to the capacity reserve margin constraint (e.g. derate factor). Used by the hourly formulation (`CapacityReserveMargin = 1`), where it is multiplied by the hourly availability (VRE, must-run) or dispatch (storage, hydro, flexible demand) of the resource.|
+|Annual\_Derating\_Factor\_*| [0,1], capacity accreditation of the resource (e.g. ELCC or UCAP fraction), multiplied by installed capacity. Required by the annual formulation (`CapacityReserveMargin = 2`) and ignored otherwise. As it is not multiplied by availability, it must include the coincidence of variable renewable output with the peak and the duration limits of energy-limited resources. For electrolyzers, it is the share of their capacity expected to be consuming at the peak, which is added to the requirement.|
 
 This policy is applied when if `HydrogenMinimumProduction = 1` in the settings file. \* corresponds to the ith row of the file `Hydrogen_demand.csv`.
 
@@ -770,6 +771,8 @@ Note: this file should use the same region name as specified in the resource `.c
 |Region\_description |Region name|
 |Network\_zones |zone number represented as z*|
 |CapRes\_* |[0,1], Capacity reserve margin requirements of a zone, reported as a fraction of demand|
+
+With the hourly formulation (`CapacityReserveMargin = 1`), each requirement is enforced in every time step against the demand of that time step. With the annual formulation (`CapacityReserveMargin = 2`), each requirement is a single constraint against the coincident peak demand of its zones (the highest total demand at the same time step). In the annual formulation, the lines with a non-zero `CapRes_Excl_*` in `Network.csv` contribute through a single peak transfer per line, bounded by the line capacity.
 
 
 

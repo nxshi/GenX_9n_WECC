@@ -11,7 +11,7 @@ function storage_symmetric!(EP::Model, inputs::Dict, setup::Dict)
     println("Storage Resources with Symmetric Charge/Discharge Capacity Module")
 
     OperationalReserves = setup["OperationalReserves"] == 1
-    CapacityReserveMargin = setup["CapacityReserveMargin"] > 0
+    CapacityReserveMargin = setup["CapacityReserveMargin"] == 1
 
     T = inputs["T"]     # Number of time steps (hours)
 

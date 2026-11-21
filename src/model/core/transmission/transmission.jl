@@ -157,7 +157,7 @@ function transmission!(EP::Model, inputs::Dict, setup::Dict)
     add_similar_to_expression!(EP[:ePowerBalance], ePowerBalanceNetExportFlows)
 
     # Capacity Reserves Margin policy
-    if CapacityReserveMargin > 0
+    if CapacityReserveMargin == 1
         if Z > 1
             @expression(EP,
                 eCapResMarBalanceTrans[res = 1:inputs["NCapacityReserveMargin"], t = 1:T],

@@ -409,7 +409,7 @@ function write_outputs(EP::Model, path::AbstractString, setup::Dict, inputs::Dic
             end
 
             if output_settings_d["WriteReserveMarginRevenue"] ||
-               output_settings_d["WriteNetRevenue"]
+               output_settings_d["WriteNetRevenue"] || output_settings_d["WriteCapacityCredit"]
                 elapsed_time_res_rev = @elapsed dfResRevenue = write_reserve_margin_revenue(
                     path,
                     inputs,
@@ -417,6 +417,16 @@ function write_outputs(EP::Model, path::AbstractString, setup::Dict, inputs::Dic
                     EP)
                 println("Time elapsed for writing reserve revenue is")
                 println(elapsed_time_res_rev)
+            end
+
+            if output_settings_d["WriteCapacityCredit"]
+                elapsed_time_cap_credit = @elapsed write_capacity_credit(path,
+                    inputs,
+                    setup,
+                    EP,
+                    dfResRevenue)
+                println("Time elapsed for writing capacity credit is")
+                println(elapsed_time_cap_credit)
             end
 
             if haskey(inputs, "dfCapRes_slack") &&
@@ -436,6 +446,47 @@ function write_outputs(EP::Model, path::AbstractString, setup::Dict, inputs::Dic
                     EP)
                 println("Time elapsed for writing capacity value is")
                 println(elapsed_time_cap_value)
+            end
+        end
+
+        if setup["CapacityReserveMargin"] == 2
+            if output_settings_d["WriteReserveMargin"]
+                elapsed_time_reserve_margin = @elapsed write_reserve_margin_annual(path,
+                    inputs,
+                    setup,
+                    EP)
+                println("Time elapsed for writing annual reserve margin is")
+                println(elapsed_time_reserve_margin)
+            end
+
+            if has_duals(EP) && (output_settings_d["WriteReserveMarginRevenue"] ||
+                output_settings_d["WriteNetRevenue"])
+                elapsed_time_res_rev = @elapsed dfResRevenue = write_reserve_margin_revenue_annual(
+                    path,
+                    inputs,
+                    setup,
+                    EP)
+                println("Time elapsed for writing reserve revenue is")
+                println(elapsed_time_res_rev)
+            end
+
+            if output_settings_d["WriteCapacityCredit"]
+                elapsed_time_cap_credit = @elapsed write_capacity_credit(path,
+                    inputs,
+                    setup,
+                    EP)
+                println("Time elapsed for writing capacity credit is")
+                println(elapsed_time_cap_credit)
+            end
+
+            if haskey(inputs, "dfCapRes_slack") &&
+               output_settings_d["WriteReserveMarginSlack"]
+                elapsed_time_rsv_slack = @elapsed write_reserve_margin_slack_annual(path,
+                    inputs,
+                    setup,
+                    EP)
+                println("Time elapsed for writing reserve margin slack is")
+                println(elapsed_time_rsv_slack)
             end
         end
 
@@ -511,6 +562,26 @@ function write_outputs(EP::Model, path::AbstractString, setup::Dict, inputs::Dic
             println(elapsed_time_net_rev)
         end
     end
+
+    # Unlike the price and revenue outputs above, the quantities and capacity credits of the annual
+    # capacity reserve margin do not depend on shadow prices, so they are also written for multi-stage runs
+    if setup["MultiStage"] == 1 && setup["CapacityReserveMargin"] == 2
+        if output_settings_d["WriteReserveMargin"]
+            elapsed_time_reserve_margin = @elapsed write_reserve_margin_annual(path,
+                inputs,
+                setup,
+                EP)
+            println("Time elapsed for writing annual reserve margin is")
+            println(elapsed_time_reserve_margin)
+        end
+
+        if output_settings_d["WriteCapacityCredit"]
+            elapsed_time_cap_credit = @elapsed write_capacity_credit(path, inputs, setup, EP)
+            println("Time elapsed for writing capacity credit is")
+            println(elapsed_time_cap_credit)
+        end
+    end
+
     ## Print confirmation
     println("Wrote outputs to $path")
 

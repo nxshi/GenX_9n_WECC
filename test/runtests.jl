@@ -65,6 +65,10 @@ end
     @testset "Retrofit" begin
         include("test_retrofit.jl")
     end
+
+    @testset "Capacity Reserve Margin" begin
+        include("test_capacity_reserve_margin.jl")
+    end
 end
 
 @testset "Benders decomposition" begin
