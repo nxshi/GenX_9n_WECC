@@ -20,6 +20,9 @@ FILE_NAMES = {
     "sampled_ddp_area_reserves": "genx-sampled-weeks-ddp-area-reserves-results.xlsx",
     "sampled_ddp_hydro_ror": "genx-sampled-weeks-ddp-hydro-ror-results.xlsx",
     "sampled_ddp_imports_hydro_ror": "genx-sampled-weeks-ddp-imports-hydro-ror-results.xlsx",
+    "sampled_ddp_annual_reserves": "genx-sampled-weeks-ddp-annual-reserves-results.xlsx",
+    "sampled_ddp_annual_reserves_imports": "genx-sampled-weeks-ddp-annual-reserves-imports-results.xlsx",
+    "sampled_ddp_annual_reserves_sampled_peak": "genx-sampled-weeks-ddp-annual-reserves-sampled-peak-results.xlsx",
 }
 
 

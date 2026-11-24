@@ -598,6 +598,12 @@ def main():
                       "GenX (sampled weeks; DDP; area reserves; run-of-river hydro)", "TDR_results"),
         genx_scenario(case_root, "results_ddp_imports_hydro_ror", "sampled_ddp_imports_hydro_ror",
                       "GenX (sampled weeks; DDP; area reserves; imports; run-of-river hydro)", "TDR_results"),
+        genx_scenario(case_root, "results_ddp_annual_reserves", "sampled_ddp_annual_reserves",
+                      "GenX (sampled weeks; DDP; annual area reserves; run-of-river hydro)", "TDR_results"),
+        genx_scenario(case_root, "results_ddp_annual_reserves_imports", "sampled_ddp_annual_reserves_imports",
+                      "GenX (sampled weeks; DDP; annual area reserves; imports; run-of-river hydro)", "TDR_results"),
+        genx_scenario(case_root, "results_ddp_annual_reserves_sampled_peak", "sampled_ddp_annual_reserves_sampled_peak",
+                      "GenX (sampled weeks; DDP; annual area reserves, sampled-week peak; run-of-river hydro)", "TDR_results"),
     ]
     cost_components = [
         key for key in COST_ORDER
@@ -666,6 +672,15 @@ def main():
             "cannot exceed availability times capacity. In the other GenX results, hydro can shift "
             "water within each modeled week. The result labelled imports also counts line flows "
             "toward each area's reserves.",
+            "The annual area-reserves results replace the hourly reserve margin with GenX's annual "
+            "(planning) reserve margin, CapacityReserveMargin = 2, which mirrors EPRI's rule: in each of "
+            "EPRI's four planning areas and each model year, EPRI's capacity credit times installed "
+            "capacity must cover 115% of the area's coincident peak demand. No hourly derating factors "
+            "are used. The default sets each area's margin so the requirement equals 115% of the "
+            "full-year peak in Demand.csv; the sampled-week-peak result applies 15% to the peak of "
+            "the 13 modeled weeks, which is up to 4.6% lower. The result labelled imports also lets "
+            "firm capacity transfer between areas over the lines, within line ratings. All three use "
+            "run-of-river hydro.",
             "The K-means GenX result predates the learning-rate and storage-efficiency input fixes "
             "and is not yet directly comparable.",
         ],
