@@ -23,9 +23,27 @@ notes.docx) and implemented accordingly below:
   - Storage: the source's single round-trip Efficiency is applied entirely
     on the charge leg (Eff_Up=Efficiency, Eff_Down=1), matching EPRI's own
     model exactly, not our earlier symmetric sqrt() split.
-  - Hydro: GenX's Hydro.csv resource type with Hydro_Energy_to_Power_Ratio=0
-    (pure run-of-river, no reservoir) — EPRI confirmed this matches their
-    own "simple run of river approach."
+  - Hydro: by default GenX's Hydro.csv resource type with
+    Hydro_Energy_to_Power_Ratio=0. That is NOT run-of-river: a ratio of 0 turns off
+    GenX's reservoir size limit (cHydroMaxEnergy), so hydro can store each hour's
+    inflow and release it at any time within the same representative week, up to
+    its capacity. --hydro-as-vre writes hydro as a curtailable Vre.csv resource
+    instead (output <= availability x capacity each hour), which is the run-of-river
+    representation EPRI describes. The hourly availability comes from the six hydro
+    profiles in EPRI's AvailabilityFactor.csv (via Generators_variability.csv);
+    some values exceed 1, and EPRI's own dispatch uses them uncapped, as GenX does.
+
+Capacity reserve margin (GenX CapacityReserveMargin setting):
+  - Default, hourly (CapacityReserveMargin: 1): Derating_Factor_N columns from
+    DERATING_FACTORS, multiplied by GenX by hourly availability or dispatch.
+  - --annual-crm (CapacityReserveMargin: 2, annual planning reserve margin): only
+    Annual_Derating_Factor_N columns are written, set to EPRI's CapacityCredit, which
+    GenX multiplies by installed capacity. No Derating_Factor_N columns are written, so
+    the two cannot be combined. GenX takes the peak from the modeled hours; with
+    --crm-peak full (default) each area's margin is raised so that
+    (1 + margin) x modeled peak = (1 + EPRI margin) x full-year peak, as in EPRI's rule.
+    --crm-peak sampled keeps EPRI's margin on the modeled peak.
+  - This script does not edit settings: set CapacityReserveMargin in genx_settings.yml.
 """
 from __future__ import annotations
 
@@ -106,6 +124,7 @@ MULTISTAGE_FIELDS = [
 ]
 AREA_NUMBERS = range(1, len(CAP_RES_AREAS) + 1)
 DERATING_FIELDS = ["Resource", *(f"Derating_Factor_{number}" for number in AREA_NUMBERS)]
+ANNUAL_DERATING_FIELDS = ["Resource", *(f"Annual_Derating_Factor_{number}" for number in AREA_NUMBERS)]
 CAP_RES_FIELDS = ["Region_description", "Network_zones", *(f"CapRes_{number}" for number in AREA_NUMBERS)]
 
 
@@ -366,7 +385,16 @@ def main() -> int:
                          help="Validate the delivery without writing any files")
     parser.add_argument("--hydro-as-vre", action="store_true",
                          help="Write hydro to Vre.csv as curtailable run-of-river and remove Hydro.csv")
+    parser.add_argument("--annual-crm", action="store_true",
+                         help="Write inputs for GenX's annual capacity reserve margin (CapacityReserveMargin: 2): "
+                              "Annual_Derating_Factor_N = EPRI CapacityCredit, and no hourly Derating_Factor_N")
+    parser.add_argument("--crm-peak", choices=("full", "sampled"), default="full",
+                         help="With --annual-crm: scale each area's margin to EPRI's full-year peak (full), "
+                              "or apply EPRI's margin to the peak of the modeled hours (sampled)")
+    parser.add_argument("--tdr-folder", default="TDR_results",
+                         help="Time-domain-reduction folder in each stage, used for the modeled peak with --crm-peak full")
     args = parser.parse_args()
+    require(args.annual_crm or args.crm_peak == "full", "--crm-peak only applies with --annual-crm")
     inputs_root = args.inputs_root.resolve()
     source = (args.source or inputs_root / "WECC-9n test system" / "data").resolve()
     require(source.is_dir(), f"Source directory does not exist: {source}")
@@ -399,6 +427,21 @@ def main() -> int:
     nameplate_mwh = {row["Unit"]: float(row["MaximumStorage"]) for row in generation_rows
                       if row["MaximumStorage"] not in (None, "")}
     area_reserve = {(row["Year"], row["Area"]): float(row["ReserveMargin"]) for row in area_rows}
+    capacity_credit = {}
+    full_peak = {}
+    if args.annual_crm:
+        require("CapacityCredit" in generation_fields, "Generation.csv is missing CapacityCredit")
+        for row in generation_rows:
+            value = float(row["CapacityCredit"])
+            require(0 <= value <= 1, f"CapacityCredit outside [0, 1] for {row['Unit']}")
+            capacity_credit[row["Unit"]] = value
+        if args.crm_peak == "full":
+            _, demand_rows = read_csv(source / "Demand.csv")
+            for _, year in STAGES:
+                for area in CAP_RES_AREAS:
+                    nodes = [node for node in ZONE_MAP if NODE_AREA[node] == area]
+                    full_peak[(year, area)] = max(
+                        sum(float(row[node]) for node in nodes) for row in demand_rows if row["Year"] == year)
 
     if args.dry_run:
         print(f"Validated source delivery: {source}")
@@ -416,6 +459,15 @@ def main() -> int:
 
         thermal_rows, vre_rows, storage_rows, hydro_rows = [], [], [], []
         multistage_rows, derating_rows = [], []
+        area_margin = {area: area_reserve[(year, area)] - 1 for area in CAP_RES_AREAS}
+        if args.annual_crm and args.crm_peak == "full":
+            # GenX's annual requirement is (1 + margin) x the coincident area peak over the
+            # modeled hours; raise the margin so that it equals EPRI's full-year requirement.
+            _, modeled_rows = read_csv(stage_dir / args.tdr_folder / "Demand_data.csv")
+            for area in CAP_RES_AREAS:
+                columns = [f"Demand_MW_{ZONE_MAP[node]}" for node in ZONE_MAP if NODE_AREA[node] == area]
+                modeled_peak = max(sum(float(row[column]) for column in columns) for row in modeled_rows)
+                area_margin[area] = (1 + area_margin[area]) * full_peak[(year, area)] / modeled_peak - 1
 
         for row in generation_rows:
             unit, node, tech = row["Unit"], row["Node"], row["Technology"]
@@ -443,10 +495,12 @@ def main() -> int:
                 min_retired = min_retired_capacity(schedule, unit, year, previous_year, nameplate_mw[unit])
                 multistage_rows.append(build_multistage_row(unit, min_retired))
 
+            prefix, factor = (("Annual_Derating_Factor", capacity_credit[unit]) if args.annual_crm
+                              else ("Derating_Factor", DERATING_FACTORS[tech]))
             derating_rows.append({
                 "Resource": unit,
                 **{
-                    f"Derating_Factor_{number}": DERATING_FACTORS[tech] if area == NODE_AREA[row["Node"]] else 0
+                    f"{prefix}_{number}": factor if area == NODE_AREA[row["Node"]] else 0
                     for number, area in enumerate(CAP_RES_AREAS, start=1)
                 },
             })
@@ -460,14 +514,14 @@ def main() -> int:
             write_csv_atomic(resources_dir / "Hydro.csv", HYDRO_FIELDS, hydro_rows)
         write_csv_atomic(resources_dir / "Resource_multistage_data.csv", MULTISTAGE_FIELDS, multistage_rows)
         write_csv_atomic(policy_assignments_dir / "Resource_capacity_reserve_margin.csv",
-                          DERATING_FIELDS, derating_rows)
+                          ANNUAL_DERATING_FIELDS if args.annual_crm else DERATING_FIELDS, derating_rows)
 
         cap_res_rows = [
             {
                 "Region_description": node,
                 "Network_zones": ZONE_MAP[node],
                 **{
-                    f"CapRes_{number}": fmt(area_reserve[(year, area)] - 1) if area == NODE_AREA[node] else 0
+                    f"CapRes_{number}": fmt(area_margin[area]) if area == NODE_AREA[node] else 0
                     for number, area in enumerate(CAP_RES_AREAS, start=1)
                 },
             }
