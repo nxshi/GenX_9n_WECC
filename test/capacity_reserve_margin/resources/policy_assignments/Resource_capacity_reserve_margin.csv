@@ -1,0 +1,11 @@
+Resource,Derating_Factor_1,Derating_Factor_2,Annual_Derating_Factor_1,Annual_Derating_Factor_2
+MA_natural_gas_combined_cycle,0.93,0.93,0.93,0.93
+MA_solar_pv,0.8,0.8,0.3,0.3
+CT_natural_gas_combined_cycle,0.93,0,0.93,0
+CT_onshore_wind,0.8,0,0.2,0
+CT_solar_pv,0.8,0,0.3,0
+ME_natural_gas_combined_cycle,0.93,0,0.93,0
+ME_onshore_wind,0.8,0,0.2,0
+MA_battery,0.95,0.95,0.8,0.8
+CT_battery,0.95,0,0.8,0
+ME_battery,0.95,0,0.8,0

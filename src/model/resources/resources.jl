@@ -748,6 +748,11 @@ max_cap(r::AbstractResource; tag::Int64) = get(r, Symbol("max_cap_$tag"), defaul
 function derating_factor(r::AbstractResource; tag::Int64)
     get(r, Symbol("derating_factor_$tag"), default_zero)
 end
+# Capacity accreditation used by the annual capacity reserve margin (CapacityReserveMargin = 2).
+# Kept separate from `derating_factor`, which the hourly formulation multiplies by availability.
+function annual_derating_factor(r::AbstractResource; tag::Int64)
+    get(r, Symbol("annual_derating_factor_$tag"), default_zero)
+end
 
 # write_outputs
 region(r::AbstractResource) = r.region

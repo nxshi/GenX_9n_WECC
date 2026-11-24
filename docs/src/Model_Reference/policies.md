@@ -2,6 +2,15 @@
 ## Capacity Reserve Margin
 ```@docs
 GenX.cap_reserve_margin!
+GenX.cap_reserve_margin_annual!
+GenX.annual_capacity_reserve_requirement
+GenX.annual_capacity_reserve_lines
+GenX.annual_capacity_reserve_crossing
+GenX.validate_annual_capacity_reserve_lines
+GenX.annual_capacity_reserve_transfer_lines
+GenX.annual_capacity_reserve_uncovered_exports
+GenX.annual_capacity_reserve_capacity!
+GenX.annual_capacity_reserve_vre_stor!
 ```
 
 ## CO$_2$ Constraint Policy

@@ -176,6 +176,12 @@ function planning_model!(EP::Model, setup::Dict, inputs::Dict)
         maximum_capacity_requirement!(EP, inputs, setup)
     end
 
+    # Annual capacity reserve margin: it only depends on capacity decisions, so it belongs to
+    # the planning problem (the hourly formulation is added in operation_model!)
+    if setup["CapacityReserveMargin"] == 2
+        cap_reserve_margin_annual!(EP, inputs, setup)
+    end
+
     # Benders-only planning-phase CO2 cap constraints (annual budget on investment)
     if setup["CO2Cap"] > 0 && setup["Benders"] == 1
         co2_cap_planning!(EP, inputs, setup)
@@ -219,7 +225,7 @@ function operation_model!(EP::Model, setup::Dict, inputs::Dict)
     create_empty_expression!(EP, :eELOSSByZone, Z)
 
     # Initialize Capacity Reserve Margin Expression
-    if setup["CapacityReserveMargin"] > 0
+    if setup["CapacityReserveMargin"] == 1
         create_empty_expression!(EP,
             :eCapResMarBalance,
             (inputs["NCapacityReserveMargin"], T))
@@ -382,7 +388,7 @@ function operation_model!(EP::Model, setup::Dict, inputs::Dict)
     end
 
     # Capacity Reserve Margin
-    if setup["CapacityReserveMargin"] > 0
+    if setup["CapacityReserveMargin"] == 1
         cap_reserve_margin!(EP, inputs, setup)
     end
 

@@ -35,7 +35,7 @@ function must_run!(EP::Model, inputs::Dict, setup::Dict)
     add_similar_to_expression!(EP[:ePowerBalance], ePowerBalanceNdisp)
 
     # Capacity Reserves Margin policy
-    if CapacityReserveMargin > 0
+    if CapacityReserveMargin == 1
         nCRMZones = inputs["NCapacityReserveMargin"]
         capresfactor = inputs["DERATING_FACTOR"]
         @expression(EP,

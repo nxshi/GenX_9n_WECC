@@ -22,7 +22,7 @@ Instructions for each policy type are listed below:
 
 Slack variables for Capacity Reserve Margin constraints are created when GenX detects the presence of the file `Capacity_reserve_margin_slack.csv` in the Inputs folder. 
 This file should contain two columns: one titled 'CRM_Constraint' naming the individual Capacity Reserve Margin constraints in the same order in which they are listed in the first row of `Capacity_reserve_margin.csv`, and a second titled 'PriceCap' containing the price thresholds for each constraint. 
-The units for these thresholds are USD/MW.
+The units for these thresholds are USD/MW. With the annual formulation (`CapacityReserveMargin = 2`), there is a single slack variable per constraint and the thresholds are in USD/MW-yr.
 
 ## CO2 Cap
 Slack variables for CO2 Cap constraints are created when GenX detects the presence of the file `CO2_cap_slack.csv` in the Inputs folder. 
