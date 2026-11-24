@@ -5,12 +5,7 @@ on:
     branches: [main]
     paths:
       - "example_systems/0_nine_zones_w_multistage/Results_EPRI.xlsx"
-      - "example_systems/0_nine_zones_w_multistage/results_kmeans_myopic/**"
-      - "example_systems/0_nine_zones_w_multistage/results_sampled_myopic/**"
-      - "example_systems/0_nine_zones_w_multistage/results_ddp/**"
-      - "example_systems/0_nine_zones_w_multistage/results_ddp_area_reserves/**"
-      - "example_systems/0_nine_zones_w_multistage/results_ddp_hydro_ror/**"
-      - "example_systems/0_nine_zones_w_multistage/results_ddp_imports_hydro_ror/**"
+      - "example_systems/0_nine_zones_w_multistage/results_*/**"
       - "example_systems/0_nine_zones_w_multistage/inputs/**"
       - "example_systems/0_nine_zones_w_multistage/website/**"
       - ".github/workflows/results-website.yml"
