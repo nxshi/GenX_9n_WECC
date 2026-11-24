@@ -101,6 +101,11 @@ function validate_settings!(settings::Dict{Any, Any})
         settings["EnableJuMPStringNames"] = 1
     end
 
+    if settings["CapacityReserveMargin"] ∉ (0, 1, 2)
+        error("""CapacityReserveMargin must be 0 (off), 1 (hourly formulation)
+        or 2 (annual formulation); got $(settings["CapacityReserveMargin"]).""")
+    end
+
     if settings["Bilinear_DC_OPF"] == 1 && settings["DC_OPF"] == 0
         @warn """The Bilinear_DC_OPF setting is only relevant when DC_OPF = 1.
         Setting DC_OPF = 1 to enable Bilinear_DC_OPF."""
@@ -112,6 +117,7 @@ function default_writeoutput()
     Dict{String, Bool}("WriteCosts" => true,
         "WriteCapacity" => true,
         "WriteCapacityValue" => true,
+        "WriteCapacityCredit" => true,
         "WriteCapacityFactor" => true,
         "WriteCharge" => true,
         "WriteChargingCost" => true,
@@ -172,7 +178,10 @@ function configure_writeoutput(output_settings_path::String, settings::Dict)
         writeoutput["WriteStorageDual"] = false
         writeoutput["WriteTimeWeights"] = false
         writeoutput["WriteCapacityValue"] = false
-        writeoutput["WriteReserveMargin"] = false
+        # ReserveMargin_annual.csv (annual capacity reserve margin) has no hourly data
+        if get(settings, "CapacityReserveMargin", 0) != 2
+            writeoutput["WriteReserveMargin"] = false
+        end
         writeoutput["WriteReserveMarginWithWeights"] = false
         writeoutput["WriteAngles"] = false
         writeoutput["WriteTransmissionFlows"] = false

@@ -61,6 +61,15 @@ function write_benders_output(benders_results::NamedTuple, outpath::AbstractStri
 		end
 	end
 
+	# The annual capacity reserve margin is part of the planning problem: its quantities and
+	# capacity credits are evaluated at the incumbent planning solution (without shadow prices)
+	if setup["CapacityReserveMargin"] == 2
+		elapsed_time_capres = @elapsed write_capacity_reserve_margin_annual_benders(outpath,
+			inputs, setup, planning_problem, benders_results.planning_sol)
+		println("Time elapsed for writing annual capacity reserve margin outputs is")
+		println(elapsed_time_capres)
+	end
+
 	if gap_hist[end] > setup[:ConvTol]
 		@warn "Benders decomposition did not converge to the requested tolerance $(setup[:ConvTol]). Final gap was: $(gap_hist[end])"
 	end
@@ -193,6 +202,30 @@ function write_benders_output(benders_results::NamedTuple, outpath::AbstractStri
 			println(elapsed)
 		end
 	end
+end
+
+@doc raw"""
+	write_capacity_reserve_margin_annual_benders(path, inputs, setup, planning_problem, planning_sol)
+
+Write the annual capacity reserve margin outputs (`ReserveMargin_annual.csv`, `CapacityCredit.csv`
+and, with slack variables, `ReserveMargin_slack_and_penalties.csv`) for Benders decomposition. The
+values are those of the incumbent planning solution `planning_sol`; shadow prices are not written, as
+they are not reliably recoverable from the master problem.
+"""
+function write_capacity_reserve_margin_annual_benders(path::AbstractString, inputs::Dict,
+	setup::Dict, planning_problem::Model, planning_sol::NamedTuple)
+	output_settings_d = get(setup, "WriteOutputsSettingsDict", Dict{String, Bool}())
+	pv(x) = value(v -> get(planning_sol.values, name(v), 0.0), x)
+	if get(output_settings_d, "WriteReserveMargin", true)
+		write_reserve_margin_annual(path, inputs, setup, planning_problem; val = pv, prices = false)
+	end
+	if get(output_settings_d, "WriteCapacityCredit", true)
+		write_capacity_credit(path, inputs, setup, planning_problem; val = pv)
+	end
+	if haskey(inputs, "dfCapRes_slack") && get(output_settings_d, "WriteReserveMarginSlack", true)
+		write_reserve_margin_slack_annual(path, inputs, setup, planning_problem; val = pv)
+	end
+	return nothing
 end
 
 @doc raw"""

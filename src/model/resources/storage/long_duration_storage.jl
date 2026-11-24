@@ -130,7 +130,7 @@ function long_duration_storage!(EP::Model, inputs::Dict, setup::Dict)
     # Build up inventory can be positive or negative
     @variable(EP, vdSOC[y in STOR_LONG_DURATION, w = 1:REP_PERIOD])
 
-    if CapacityReserveMargin > 0
+    if CapacityReserveMargin == 1
         # State of charge held in reserve for storage at beginning of each modeled period n
         @variable(EP, vCAPRES_socw[y in STOR_LONG_DURATION, n in MODELED_PERIODS_INDEX]>=0)
 
@@ -188,7 +188,7 @@ function long_duration_storage!(EP::Model, inputs::Dict, setup::Dict)
                 vdSOC[y, dfPeriodMap[r, :Rep_Period_Index]])
 
     # Capacity Reserve Margin policy
-    if CapacityReserveMargin > 0
+    if CapacityReserveMargin == 1
         vCAPRES_charge = EP[:vCAPRES_charge]
         vCAPRES_discharge = EP[:vCAPRES_discharge]
         vCAPRES_socinreserve = EP[:vCAPRES_socinreserve]
@@ -297,7 +297,7 @@ function long_duration_storage_subperiod!(EP::Model, inputs::Dict, setup::Dict)
 	@constraint(EP,cSlackLDS_Sub_Up[y in STOR_LONG_DURATION, [r]],vLDS_Sub_slack[y,r]<= EP[:vLDS_SLACK_MAX][1])
 	@constraint(EP,cSlackLDS_Sub_Lo[y in STOR_LONG_DURATION, [r]],-vLDS_Sub_slack[y,r]<= EP[:vLDS_SLACK_MAX][1])
 
-    if CapacityReserveMargin > 0
+    if CapacityReserveMargin == 1
         # State of charge held in reserve for storage at beginning of each modeled period n
         @variable(EP, vCAPRES_socw[y in STOR_LONG_DURATION, [r]]>=0)
 
@@ -332,7 +332,7 @@ function long_duration_storage_subperiod!(EP::Model, inputs::Dict, setup::Dict)
         vSOCw[y,r]==EP[:vS][y, hours_per_subperiod] - vdSOC[y, w] + vLDS_Sub_slack[y,r])
 
     # Capacity Reserve Margin policy
-    if CapacityReserveMargin > 0
+    if CapacityReserveMargin == 1
         # LDES Constraints for storage held in reserve
 
         # Links last time step with first time step, ensuring position in hour 1 is within eligible change from final hour position
@@ -383,7 +383,7 @@ function long_duration_storage_planning!(EP::Model, inputs::Dict, setup::Dict)
     # Build up inventory can be positive or negative
     @variable(EP, vdSOC[y in STOR_LONG_DURATION, w = 1:REP_PERIOD])
 
-    if CapacityReserveMargin > 0
+    if CapacityReserveMargin == 1
         # State of charge held in reserve for storage at beginning of each modeled period n
         @variable(EP, vCAPRES_socw[y in STOR_LONG_DURATION, n in MODELED_PERIODS_INDEX]>=0)
 
@@ -410,7 +410,7 @@ function long_duration_storage_planning!(EP::Model, inputs::Dict, setup::Dict)
 
 
     # Capacity Reserve Margin policy
-    if CapacityReserveMargin > 0
+    if CapacityReserveMargin == 1
         # LDES Constraints for storage held in reserve
 
         # Storage held in reserve at beginning of period w = storage at beginning of period w-1 + storage built up in period w (after n representative periods)

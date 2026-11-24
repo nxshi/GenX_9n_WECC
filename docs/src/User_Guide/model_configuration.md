@@ -77,7 +77,8 @@ The following tables summarize the model settings parameters and their default/p
 || 1 = activate energy share requirement related constraints. |
 |CapacityReserveMargin | Flag for Capacity Reserve Margin constraints. |
 || Default = 0 (No Capacity Reserve Margin constraints)|
-|| 1 = activate Capacity Reserve Margin related constraints |
+|| 1 = activate hourly Capacity Reserve Margin constraints (one constraint per requirement and time step, contributions based on hourly availability and dispatch) |
+|| 2 = activate annual Capacity Reserve Margin constraints (one constraint per requirement, accredited installed capacity against the coincident peak demand; requires `Annual_Derating_Factor_*` columns in `Resource_capacity_reserve_margin.csv`) |
 |MinCapReq | Minimum technology carve out requirement constraints.|
 || 1 = if one or more minimum technology capacity constraints are specified|
 || 0 = otherwise|

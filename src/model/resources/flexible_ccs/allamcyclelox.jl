@@ -177,7 +177,7 @@ function allamcyclelox!(EP::Model, inputs::Dict, setup::Dict)
 
     # Expressions related to policies
     # Capacity Reserves Margin policy
-    if setup["CapacityReserveMargin"] > 0
+    if setup["CapacityReserveMargin"] == 1
         nCRMZones = inputs["NCapacityReserveMargin"]
         capresfactor = inputs["DERATING_FACTOR"]
         @expression(EP,

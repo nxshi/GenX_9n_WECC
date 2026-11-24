@@ -88,7 +88,7 @@ function non_served_energy!(EP::Model, inputs::Dict, setup::Dict)
     add_similar_to_expression!(EP[:ePowerBalance], ePowerBalanceNse)
 
     # Capacity Reserves Margin policy
-    if setup["CapacityReserveMargin"] > 0
+    if setup["CapacityReserveMargin"] == 1
         if SEG >= 2
             @expression(EP,
                 eCapResMarBalanceNSE[res = 1:inputs["NCapacityReserveMargin"], t = 1:T],

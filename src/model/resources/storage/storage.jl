@@ -178,7 +178,7 @@ function storage!(EP::Model, inputs::Dict, setup::Dict)
     end
 
     # Capacity Reserves Margin policy
-    if CapacityReserveMargin > 0
+    if CapacityReserveMargin == 1
         vP = EP[:vP]
         vCHARGE = EP[:vCHARGE]
         nCRMZones = inputs["NCapacityReserveMargin"]

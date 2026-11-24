@@ -432,7 +432,7 @@ function investment_discharge_vre_stor!(EP::Model, inputs::Dict, setup::Dict)
 
         if rep_periods > 1 && !isempty(VS_LDS) && setup["Benders"] == 1
             lds_vre_stor_planning!(EP, inputs)
-            if setup["CapacityReserveMargin"] > 0
+            if setup["CapacityReserveMargin"] == 1
                 lds_vre_stor_capres_planning!(EP, inputs)
             end
         end

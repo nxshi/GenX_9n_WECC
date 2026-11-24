@@ -121,6 +121,18 @@ Modules = [GenX]
 Pages = ["write_reserve_margin_revenue.jl"]
 ```
 
+## Write Annual Capacity Reserve Margin Outputs
+```@autodocs
+Modules = [GenX]
+Pages = ["write_reserve_margin_annual.jl"]
+```
+
+## Write Capacity Credit
+```@autodocs
+Modules = [GenX]
+Pages = ["write_capacity_credit.jl"]
+```
+
 ## Write Hourly Matching Revenue
 ```@docs
 GenX.write_hourly_matching_prices

@@ -33,7 +33,7 @@ function thermal!(EP::Model, inputs::Dict, setup::Dict)
     add_similar_to_expression!(EP[:eGenerationByZone], eGenerationByThermAll)
 
     # Capacity Reserves Margin policy
-    if setup["CapacityReserveMargin"] > 0
+    if setup["CapacityReserveMargin"] == 1
         capresfactor = inputs["DERATING_FACTOR"]
         ncapres = inputs["NCapacityReserveMargin"]
         @expression(EP, eCapResMarBalanceThermal[capres in 1:ncapres, t in 1:T],
